@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      height: 100vh;
+    }
+  </style>
+  <script>
+    window.log = console.log
+    window.dlog = console.dir
+    window.__require = base => async path => {
+      path = path.split('/'), base = base.split('/'); for (const p of path) {
+        if (p === '..') { base.pop() } else if (p !== '.') { base.push(p) }
+      } path = base.filter(v => v).join('/'); if (loaded.has(path)) { return }
+      await exec(path, await load(path))
+    }
+
+    let loaded = new Set, $ = {}
+    let AsyncFunciton = (async () => { }).constructor
+    const exec = async (path, src) => (loaded.add(path), await (new AsyncFunciton('$',
+      `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
+      `const require = __require(__dirname)\n` + `with($) {\n${src}\n}`)($)))
+
+    let waitload = new Map
+    let load = async path => new Promise((res, rej) => {
+      ws.send(JSON.stringify({ command: 'load', path }))
+      waitload.set(path, { res, rej })
+    })
+
+    const sp = new URLSearchParams(location.search)
+    const initpath = sp.get('load') ?? sp.get('init')
+    let ws, connect = () => {
+      ws = new WebSocket('ws://localhost:9999/')
+      ws.onopen = () => ws.send(JSON.stringify({ command: 'init', path: initpath }))
+      ws.onmessage = e => {
+        const o = JSON.parse(e.data)
+        if (o.command === 'init') { exec(initpath, o.content) }
+        else if (o.command === 'load') {
+          waitload.get(o.path).res(o.content)
+          waitload.delete(o.path)
+        } else if (o.command === 'loadfail') {
+          waitload.get(o.path).rej(o.error)
+          waitload.delete(o.path)
+        } else if (o.command === 'reload') { location.reload() }
+        else if (o.command === 'initfail') { console.error(o.error) }
+      }
+      ws.onclose = connect
+    }; connect()
+  </script>
+</head>
+
+<body>
+</body>
+
+</html>
