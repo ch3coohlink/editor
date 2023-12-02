@@ -13,12 +13,21 @@ const server = http.createServer((req, res) => {
   s.pipe(res)
 }).listen(port)
 
-const watchs = new Map
-// TODO watch file change
+const watches = new Map
+fs.watch('.', (e, path) => {
+  for (const [, { watch, reload }] of watches) {
+    if (watch.has(path)) { reload() }
+  }
+})
+
+const debounce = (f, t = 100, i) => (...a) =>
+  (clearTimeout(i), i = setTimeout(() => f(...a), t))
+const reload = ws => debounce(() => ws.send(JSON.stringify({ command: "reload" })))
 
 const wss = new ws.WebSocketServer({ server })
 wss.on('connection', ws => {
-  let watch = new Set; watchs.set(ws, watch)
+  log('establish connection')
+  let watch = new Set; watches.set(ws, { watch, reload: reload(ws) })
   ws.on('error', console.error)
   ws.on('message', async data => {
     const o = JSON.parse(data.toString())
@@ -31,7 +40,10 @@ wss.on('connection', ws => {
       }
     }
   })
-  ws.on('close', () => watch.delete(ws))
+  ws.on('close', () => {
+    log('close connection')
+    watches.delete(ws)
+  })
 })
 
 log(`listening on localhost:${port}`)
