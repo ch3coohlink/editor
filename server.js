@@ -14,7 +14,8 @@ const server = http.createServer((req, res) => {
 }).listen(port)
 
 const watches = new Map
-fs.watch('.', (e, path) => {
+fs.watch('.', { recursive: true }, (e, path) => {
+  path = path.replaceAll('\\', '/')
   for (const [, { watch, reload }] of watches) {
     if (watch.has(path)) { reload() }
   }
