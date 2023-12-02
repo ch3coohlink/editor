@@ -7,7 +7,7 @@ const { log } = console
 const port = 9999
 
 const server = http.createServer((req, res) => {
-  let u = new URL("https://localhost" + req.url)
+  let u = new URL('https://localhost' + req.url)
   let s = fs.createReadStream(path.join(basepath, u.pathname))
   s.on('error', () => (res.writeHead(404), res.end()))
   s.pipe(res)
@@ -22,7 +22,7 @@ fs.watch('.', (e, path) => {
 
 const debounce = (f, t = 100, i) => (...a) =>
   (clearTimeout(i), i = setTimeout(() => f(...a), t))
-const reload = ws => debounce(() => ws.send(JSON.stringify({ command: "reload" })))
+const reload = ws => debounce(() => ws.send(JSON.stringify({ command: 'reload' })))
 
 const wss = new ws.WebSocketServer({ server })
 wss.on('connection', ws => {
@@ -31,12 +31,12 @@ wss.on('connection', ws => {
   ws.on('error', console.error)
   ws.on('message', async data => {
     const o = JSON.parse(data.toString())
-    if (o.command === "init" || o.command === "load") {
+    if (o.command === 'init' || o.command === 'load') {
       try {
         const f = await fs.promises.readFile(o.path); watch.add(o.path)
         ws.send(JSON.stringify({ command: o.command, path: o.path, content: f.toString() }))
       } catch (e) {
-        ws.send(JSON.stringify({ command: o.command + "fail", error: e.message, path: o.path }))
+        ws.send(JSON.stringify({ command: o.command + 'fail', error: e.message, path: o.path }))
       }
     }
   })
