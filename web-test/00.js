@@ -1,6 +1,6 @@
 let pc1 = new RTCPeerConnection(), pc2 = new RTCPeerConnection()
 
-let candidate = (pc, can) => can && pc.addIceCandidate(can).catch(console.error)
+let candidate = (pc, can) => can && pc.addIceCandidate(can)
 
 pc1.onicecandidate = e => candidate(pc2, e.candidate)
 pc2.onicecandidate = e => candidate(pc1, e.candidate)
