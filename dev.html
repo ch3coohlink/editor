@@ -16,9 +16,9 @@
     window.log = console.log
     window.dlog = console.dir
     window.__require = base => async path => {
-      path = path.split('/'), base = base.split('/'); for (const p of path) {
-        if (p === '..') { base.pop() } else if (p !== '.') { base.push(p) }
-      } path = base.filter(v => v).join('/'); if (loaded.has(path)) { return }
+      let b = base.split('/'); path = path.split('/'); for (const p of path) {
+        if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
+      } path = b.filter(v => v).join('/'); if (loaded.has(path)) { return }
       await exec(path, await load(path))
     }
 

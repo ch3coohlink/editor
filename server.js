@@ -15,6 +15,7 @@ const server = http.createServer((req, res) => {
 
 const watches = new Map
 fs.watch('.', { recursive: true }, (e, path) => {
+  if (typeof path !== 'string') { return }
   path = path.replaceAll('\\', '/')
   for (const [, { watch, reload }] of watches) {
     if (watch.has(path)) { reload() }
@@ -28,7 +29,8 @@ const reload = ws => debounce(() => ws.send(JSON.stringify({ command: 'reload' }
 const wss = new ws.WebSocketServer({ server })
 wss.on('connection', ws => {
   log('establish connection')
-  let watch = new Set; watches.set(ws, { watch, reload: reload(ws) })
+  let watch = new Set(['dev.html'])
+  watches.set(ws, { watch, reload: reload(ws) })
   ws.on('error', console.error)
   ws.on('message', async data => {
     const o = JSON.parse(data.toString())
