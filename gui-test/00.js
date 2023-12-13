@@ -14,3 +14,4 @@ $.onclose = async () => { device.destroy() }
 
 const format = navigator.gpu.getPreferredCanvasFormat()
 ctx.configure({ device, format })
+

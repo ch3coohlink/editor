@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "UMD",
+    "target": "ES2022",
+    "lib": [
+      "ESNext",
+      "DOM",
+    ],
+    "typeRoots": [
+      "./node_modules/@webgpu/types",
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules/*"
+  ],
+}
