@@ -99,31 +99,43 @@ const raybox = (ox, oy, dx, dy, bx, by, bs) => {
 const gradient = i =>
   `hsl(${Math.floor(i / counter * 360)}deg 100% 50%)`
 let counter = 0, rectarray = [], pointarray = []
+let raypos = []
 const traversal = (ray, bx, by, bs, node) => {
-  let hit = raybox(...ray, bx, by, bs)
-
-  if (hit) {
-    let i = counter++, [ox, oy, dx, dy] = ray
-    rectarray.push([i, ...mapcoord(bx, by), ...mapsize(bs, bs)])
-    pointarray.push([i, ox + hit * dx, oy + hit * dy])
-    if (node.isleaf) {
-      return hit
-    } else if (node.isempty) {
-      // step node size
-    } else {
-      let minhit = Infinity, sd2 = bs * 0.5
-      const _travelsal = (n, ...a) => {
-        if (!n) { return }
-        let hit = traversal(...a, n)
-        if (hit && hit < minhit) { minhit = hit }
-      }
-      _travelsal(node[0], ray, bx, by, sd2)
-      _travelsal(node[1], ray, bx + sd2, by, sd2)
-      _travelsal(node[2], ray, bx, by + sd2, sd2)
-      _travelsal(node[3], ray, bx + sd2, by + sd2, sd2)
-      // if (minhit < Infinity) { return minhit }
-    } return hit
-  } // no hit
+  let [ox, oy, dx, dy] = ray
+  if (bx <= ox && ox <= bx + bs && by <= oy && oy <= by + bs) {
+    let x = bx + bs * 0.5 < ox, y = by + bs * 0.5 < oy, hit
+    if (x && y && node[3]) { hit = traversal(node[3], ray, bx + sd2, by + sd2, sd2) }
+    else if (y && node[2]) { hit = traversal(node[2], ray, bx, by + sd2, sd2) }
+    else if (x && node[1]) { hit = traversal(node[1], ray, bx + sd2, by, sd2) }
+    else if (node[0]) { hit = traversal(node[0], ray, bx, by, sd2) }
+    else { }
+    if (hit) { return }
+    // caululate delat x y for dda
+  } else {
+    let hit = raybox(...ray, bx, by, bs)
+    if (hit) {
+      let i = counter++, [ox, oy, dx, dy] = ray
+      rectarray.push([i, bx, by, bs])
+      pointarray.push([i, ox + hit * dx, oy + hit * dy])
+      if (node.isleaf) {
+        return hit
+      } else if (node.isempty) {
+        // step node size
+      } else {
+        let minhit = Infinity, sd2 = bs * 0.5
+        const _traversal = (n, ...a) => {
+          if (!n) { return }
+          let hit = traversal(...a, n)
+          if (hit && hit < minhit) { minhit = hit }
+        }
+        _traversal(node[0], ray, bx, by, sd2)
+        _traversal(node[1], ray, bx + sd2, by, sd2)
+        _traversal(node[2], ray, bx, by + sd2, sd2)
+        _traversal(node[3], ray, bx + sd2, by + sd2, sd2)
+        // if (minhit < Infinity) { return minhit }
+      } return hit
+    } // no hit
+  }
 }
 
 const traversalonetime = () => {
@@ -133,6 +145,11 @@ const traversalonetime = () => {
 setTimeout(traversalonetime, 100);
 
 let step = 0
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase()
+  if (k === '=') { step++ }
+  else if (k === '-') { step-- }
+})
 cvs.onpointerdown = e => {
   if (e.button === 0) {
     if (e.shiftKey) { step-- }
@@ -161,14 +178,16 @@ const loop = t => {
   let l = step % pointarray.length
   if (step < 0) { l = pointarray.length + l }
   for (let k = 0; k < l; k++) {
-    let [i, ...a] = rectarray[k]
+    let [i, bx, by, bs] = rectarray[k]
     ctx.strokeStyle = gradient(i)
-    ctx.strokeRect(...a)
+    ctx.strokeRect(...mapcoord(bx, by), ...mapsize(bs, bs))
   }
   for (let k = 0; k < l; k++) {
     let [i, ...a] = pointarray[k]
-    // ctx.fillStyle = gradient(i)
+    ctx.fillStyle = gradient(i)
     drawpoint(...a)
+    ctx.fillStyle = 'black'
+    ctx.fillText(i, ...mapcoord(...a))
   }
 
 }; requestAnimationFrame(loop)
