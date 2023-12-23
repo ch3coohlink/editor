@@ -63,6 +63,10 @@ struct OctreeStack {
   i: i32,
   tm: vec3f,
   mask: vec3<bool>,
+  pos: vec3f,
+}
+fn rnd(v: vec4f) -> f32 {
+  return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
 }
 const nextnode_lut = array<vec3i, 8>(
   vec3(1, 2, 4), vec3(8, 3, 5), vec3(3, 8, 6), vec3(8, 8, 7),
@@ -78,15 +82,18 @@ fn firstnode(t0: vec3f, tm: vec3f) -> i32 {
   ret |= select(0, 1 << b, tm[b] < c);
   return ret;
 }
-fn rayoctree(vro: vec3f, vrd: vec3f) {
+fn rayoctree(vro: vec3f, vrd: vec3f) -> f32 {
   var ro = vro; var rd = vrd; var mirrormask = 0;
   if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
   if(rd.y < 0) { ro.y = 1 - ro.y; rd.x = -rd.y; mirrormask |= 2; }
   if(rd.z < 0) { ro.z = 1 - ro.z; rd.x = -rd.z; mirrormask |= 1; }
   let t0 = vec3(0) - ro / rd; let t1 = vec3(1) - ro / rd;
-  if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return; }
-  var stack: array<OctreeStack, 10>; var si: i32 = 0;
+  if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
+  if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
+  var step: u32 = 0; var si: u32 = 0;
+  var stack: array<OctreeStack, 10>;
   let state: ptr<function, OctreeStack> = &stack[si];
+  (*state).pos = vec3(0);
   (*state).t0 = t0; (*state).t1 = t1; (*state).state = 0;
   loop {
     let state: ptr<function, OctreeStack> = &stack[si];
@@ -101,31 +108,23 @@ fn rayoctree(vro: vec3f, vrd: vec3f) {
         let nt0 = select((*state).t0, (*state).tm, mask);
         let nt1 = select((*state).tm, (*state).t1, mask);
         (*state).mask = mask; (*state).state = 2;
-        if(nt1.x < 0 || nt1.y < 0 || nt1.z < 0) { continue; }
-        // TODO: if hit
+        
+        let size = 1 / f32(1 << (si + 1));
+        let v = rnd(vec4f((*state).pos, size));
+        if(v < 0.0) { step++; si--; continue; } // empty
+        if(si == 9) { return 1; }
+
         si++; let nstate: ptr<function, OctreeStack> = &stack[si];
+        (*nstate).pos = (*state).pos + select(vec3(0), vec3(size), mask);
         (*nstate).t0 = nt0; (*nstate).t1 = nt1; (*nstate).state = 0;
       } case 2 {
         let v = select((*state).tm, (*state).t1, (*state).mask);
         let mi = minindex(v);
         let i = nextnode_lut[(*state).i][mi]; (*state).i = i;
-        if(i >= 8) { si--; } else { (*state).state = 1; }
+        if(i < 8) { (*state).state = 1; } else { step++; si--; }
       } default {}
-    } if(si < 0) { break; }
-  }
-}`
-
-const recursive_version = /*wgsl*/`
-fn subtree(t0: vec3f, t1: vec3f) {
-  if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return; }
-  // TODO: hit terminal
-  let tm = 0.5 * (t0 + t1); var i = firstnode(t0, tm);
-  loop {
-    let mask = vec3<bool>(bool(i & 1), bool((i >> 1) & 1), bool((i >> 2) & 1));
-    subtree(select(t0, tm, mask), select(tm, t1, mask));
-    let v = select(tm, t1, mask); let mi = minindex(v);
-    i = nextnode_lut[i][mi]; if(!(i < 8)){ break; }
-  }
+    } if(si < 0 || si >= 10 || step >= 1000) { break; }
+  } return -1;
 }`
 
 const module = device.createShaderModule({
@@ -137,7 +136,7 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
 @fragment fn fragment(@builtin(position) fragcoord: vec4f
 ) -> @location(0) vec4<f32> {
   var uv = (fragcoord.xy - uniforms.resolution.xy * 0.5) / uniforms.resolution.y;
-  uv.y = -uv.y;
+  uv.y = -uv.y; // return vec4(uv, 0, 1);
 
   let ro = uniforms.campos;
   let cw = normalize(uniforms.camdir);
@@ -145,6 +144,8 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
   let cv = cross(cu, cw);
   let cam = mat3x3f(cu, cv, cw);
   let rd = cam * normalize(vec3f(uv, 1));
+
+  if(rayoctree(ro, rd) > 0) { return vec4(1, 0, 0, 1); }
 
   let skyclr = vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
   return vec4(skyclr, 1);
