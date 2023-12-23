@@ -46,11 +46,52 @@ fn raysphere(ro: vec3f, rd: vec3f, o: vec3f, r2: f32) -> bool {
   let d2 = dot(l, l) - tca * tca;
   if (d2 > r2) { return false; }
   let thc = sqrt(r2 - d2);
-  var t0 = tca - thc;
-  var t1 = tca + thc;
-  if(t0 > t1) { let tp = t1; t0 = t1; t1 = t0; }
+  var t0 = tca - thc; var t1 = tca + thc;
+  if(t0 > t1) { let tp = t1; t0 = t1; t1 = tp; }
   if(t0 < 0) { t0 = t1; if(t0 < 0) { return false; } }
   return true;
+}
+var<private> mirrormask: i32;
+const nextnode_lut = array<vec3i, 8>(
+  vec3(1, 2, 4), vec3(8, 3, 5), vec3(3, 8, 6), vec3(8, 8, 7),
+  vec3(5, 6, 8), vec3(8, 7, 8), vec3(7, 8, 8), vec3(8, 8, 8));
+fn rayoctree(vro: vec3f, vrd: vec3f) {
+  var ro = vro; var rd = vrd; mirrormask = 0;
+  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
+  if(rd.y < 0) { ro.y = 1 - ro.y; rd.x = -rd.y; mirrormask |= 2; }
+  if(rd.z < 0) { ro.z = 1 - ro.z; rd.x = -rd.z; mirrormask |= 1; }
+  let t0 = vec3(0) - ro / rd; let t1 = vec3(1) - ro / rd;
+  if(max(max(t0.x, t0.y), t0.z) < min(min(t1.x, t1.y), t1.z)) {
+    subtree(t0, t1);
+  }
+}
+const firstnode_luta = vec3u(1, 0, 0);
+const firstnode_lutb = vec3u(2, 2, 1);
+fn firstnode(t0: vec3f, tm: vec3f) -> i32 {
+  let mi = maxindex(t0);
+  let a: u32 = firstnode_luta[mi];
+  let b: u32 = firstnode_lutb[mi];
+  let c = t0[mi]; var ret = 0;
+  ret |= select(0, 1 << a, tm[a] < c);
+  ret |= select(0, 1 << b, tm[b] < c);
+  return ret;
+}
+fn minindex(v: vec3f) -> i32 {
+  return i32(v.y < v.z && v.y < v.x) + i32(v.z < v.y && v.z < v.x) * 2;
+}
+fn maxindex(v: vec3f) -> i32 {
+  return i32(v.y > v.z && v.y > v.x) + i32(v.z > v.y && v.z > v.x) * 2;
+}
+fn subtree(t0: vec3f, t1: vec3f) {
+  if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return; }
+  // TODO: hit terminal
+  let tm = 0.5 * (t0 + t1); var i = firstnode(t0, tm);
+  loop {
+    let mask = vec3<bool>(bool(i & 1), bool((i >> 1) & 1), bool((i >> 2) & 1));
+    // subtree(select(t0, tm, mask), select(tm, t1, mask));
+    let v = select(tm, t1, mask); let mi = minindex(v);
+    i = nextnode_lut[i][mi]; if(!(i < 8)){ break; }
+  }
 }
 `
 
@@ -64,7 +105,6 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
 ) -> @location(0) vec4<f32> {
   var uv = (fragcoord.xy - uniforms.resolution.xy * 0.5) / uniforms.resolution.y;
   uv.y = -uv.y;
-  // return vec4(uv, 0, 1);
 
   let ro = uniforms.campos;
   let cw = normalize(uniforms.camdir);
@@ -100,8 +140,7 @@ const updateraydir = () => {
   rd[1] = -Math.sin(polar[1])
   rd[2] = Math.sin(polar[0]) * Math.cos(polar[1])
   rd = normalize(rd)
-}
-updateraydir()
+}; updateraydir()
 
 window.addEventListener('pointerdown', e => {
   if (e.button === 0) { down = true }
@@ -128,9 +167,7 @@ window.addEventListener('keyup', e => {
 
 let st = performance.now() / 1000, pt = st
 const loop = t => {
-  t /= 1000
-  let dt = Math.min(t - pt, 1 / 60)
-  pt = t
+  t /= 1000; let dt = Math.min(t - pt, 1 / 60); pt = t
 
   let spd = 100, movero = (rd, s = 1) => {
     ro[0] += rd[0] * spd * dt * s
@@ -169,8 +206,6 @@ const loop = t => {
   uniforms.camdir[2] = rd[2]
   device.queue.writeBuffer(ub, 0, ubarr)
   const enc = device.createCommandEncoder()
-
-  // log(...ro, ...rd)
 
   const rp = enc.beginRenderPass({
     colorAttachments: [{
