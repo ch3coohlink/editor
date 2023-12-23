@@ -13,6 +13,14 @@ const cvsctx = cvs.getContext("webgpu")
 const format = navigator.gpu.getPreferredCanvasFormat()
 cvsctx.configure({ device, format })
 
+const normalize = ([x, y, z], s = 1 / Math.sqrt(x * x + y * y + z * z)) => [x * s, y * s, z * s]
+const cross = (a, b, r = Array(3)) => {
+  const t1 = a[2] * b[0] - a[0] * b[2];
+  const t2 = a[0] * b[1] - a[1] * b[0];
+  r[0] = a[1] * b[2] - a[2] * b[1];
+  r[1] = t1; r[2] = t2; return r
+}
+
 const ubdef = `struct Uniforms {
   resolution: vec2f,
   time: f32,
@@ -52,10 +60,12 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
 @vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   return vec4(pos[i], 0.0, 1.0);
 }\n${ubdef}\n${helpfn}
-@fragment fn fragment(@builtin(position) fragpos: vec4f
+@fragment fn fragment(@builtin(position) fragcoord: vec4f
 ) -> @location(0) vec4<f32> {
-  let uv = vec2f(fragpos.x / uniforms.resolution.x,
-    (1 - fragpos.y / uniforms.resolution.y));
+  var uv = (fragcoord.xy - uniforms.resolution.xy * 0.5) / uniforms.resolution.y;
+  uv.y = -uv.y;
+  // return vec4(uv, 0, 1);
+
   let ro = uniforms.campos;
   let cw = normalize(uniforms.camdir);
   let cu = normalize(cross(cw, vec3f(0, 1, 0)));
@@ -64,8 +74,11 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
   let rd = cam * normalize(vec3f(uv, 1));
 
   if(raysphere(ro, rd, vec3(10, 0, 0), 0.1)) { return vec4(1, 0, 0, 1); }
+  if(raysphere(ro, rd, vec3(-10, 0, 0), 0.1)) { return vec4(1, 1, 0, 1); }
   if(raysphere(ro, rd, vec3(0, 10, 0), 0.1)) { return vec4(0, 1, 0, 1); }
+  if(raysphere(ro, rd, vec3(0, -10, 0), 0.1)) { return vec4(0, 1, 1, 1); }
   if(raysphere(ro, rd, vec3(0, 0, 10), 0.1)) { return vec4(0, 0, 1, 1); }
+  if(raysphere(ro, rd, vec3(0, 0, -10), 0.1)) { return vec4(1, 0, 1, 1); }
 
   let skyclr = vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
   return vec4(skyclr, 1);
@@ -81,7 +94,15 @@ const bind = device.createBindGroup({
   entries: [{ binding: 0, resource: { buffer: ub } }]
 })
 
-let ro = [0, 0, 0], polar = [0, 0], rd = [0, 0, 1], down = false
+let ro = [0, 0, 0], polar = [0, 0], rd = [0, 0, 0], down = false
+const updateraydir = () => {
+  rd[0] = Math.cos(polar[0]) * Math.cos(polar[1])
+  rd[1] = -Math.sin(polar[1])
+  rd[2] = Math.sin(polar[0]) * Math.cos(polar[1])
+  rd = normalize(rd)
+}
+updateraydir()
+
 window.addEventListener('pointerdown', e => {
   if (e.button === 0) { down = true }
 })
@@ -90,39 +111,52 @@ window.addEventListener('pointerup', e => {
 })
 window.addEventListener('pointermove', e => {
   if (down) {
-    polar[0] += Math.PI * 2 * 0.001 * e.movementX
-    polar[1] = Math.max(Math.min(polar[1] + Math.PI * 2 * 0.001 * e.movementY, Math.PI / 2), -Math.PI / 2)
-    rd[0] = Math.cos(polar[0]) * Math.sin(polar[1])//Math.sin(polar[1]) * Math.cos(polar[0])
-    rd[1] = Math.cos(polar[1])//Math.sin(polar[1]) * Math.sin(polar[0])
-    rd[2] = Math.sin(polar[0]) * Math.sin(polar[1])//Math.cos(polar[1])
-    // log(...polar.map(v => v / Math.PI / 2))
-    log(rd)
+    const eff = Math.PI * 2 * 0.0005
+    polar[0] += eff * e.movementX
+    polar[1] = Math.max(Math.min(polar[1] + eff * e.movementY, Math.PI / 2), -Math.PI / 2)
+    updateraydir()
   }
 })
-
+const pressed = new Set
 window.addEventListener('keydown', e => {
-  const k = e.key.toLowerCase()
-  if (k === ' ') { }
-  else if (k === 'e') {
-    ro[0] += rd[0]
-    ro[1] += rd[1]
-    ro[2] += rd[2]
-  }
-  else if (k === 'd') {
-    ro[0] += -rd[0]
-    ro[1] += -rd[1]
-    ro[2] += -rd[2]
-  }
-  else if (k === 's') { }
-  else if (k === 'f') { }
-  else if (k === 'w') { }
-  else if (k === 'r') { }
+  pressed.add(e.key.toLowerCase())
+})
+window.addEventListener('keyup', e => {
+  pressed.delete(e.key.toLowerCase())
 })
 
+
+let st = performance.now() / 1000, pt = st
 const loop = t => {
   t /= 1000
+  let dt = Math.min(t - pt, 1 / 60)
+  pt = t
 
-  // rd = [Math.sin(t), -0.5, Math.cos(t)]
+  let spd = 100, movero = (rd, s = 1) => {
+    ro[0] += rd[0] * spd * dt * s
+    ro[1] += rd[1] * spd * dt * s
+    ro[2] += rd[2] * spd * dt * s
+  }
+  if (pressed.has('shift')) { spd *= 5 }
+  if (pressed.has('h')) { ro = [0, 0, 0] }
+  if (pressed.has('e')) { movero(rd) }
+  if (pressed.has('d')) { movero(rd, -1) }
+  if (pressed.has('s')) {
+    movero(normalize(cross(rd, [0, 1, 0])), -1)
+  }
+  if (pressed.has('f')) {
+    movero(normalize(cross(rd, [0, 1, 0])))
+  }
+  if (pressed.has('r')) {
+    const cu = normalize(cross(rd, [0, 1, 0]))
+    const cv = normalize(cross(cu, rd))
+    movero(cv)
+  }
+  if (pressed.has('w')) {
+    const cu = normalize(cross(rd, [0, 1, 0]))
+    const cv = normalize(cross(cu, rd))
+    movero(cv, -1)
+  }
 
   uniforms.resolution[0] = cvs.width
   uniforms.resolution[1] = cvs.height
