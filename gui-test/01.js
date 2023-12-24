@@ -68,9 +68,12 @@ struct OctreeStack {
 fn rnd(v: vec4f) -> f32 {
   return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
 }
+// const nextnode_lut = array<vec3u, 8>(
+//   vec3(1, 2, 4), vec3(8, 3, 5), vec3(3, 8, 6), vec3(8, 8, 7),
+//   vec3(5, 6, 8), vec3(8, 7, 8), vec3(7, 8, 8), vec3(8, 8, 8));
 const nextnode_lut = array<vec3u, 8>(
-  vec3(1, 2, 4), vec3(8, 3, 5), vec3(3, 8, 6), vec3(8, 8, 7),
-  vec3(5, 6, 8), vec3(8, 7, 8), vec3(7, 8, 8), vec3(8, 8, 8));
+  vec3(4, 2, 1), vec3(5, 3, 8), vec3(6, 8, 3), vec3(7, 8, 8),
+  vec3(8, 6, 5), vec3(8, 7, 8), vec3(8, 8, 7), vec3(8, 8, 8));
 const firstnode_luta = vec3u(1, 0, 0);
 const firstnode_lutb = vec3u(2, 2, 1);
 fn firstnode(t0: vec3f, tm: vec3f) -> u32 {
@@ -82,58 +85,76 @@ fn firstnode(t0: vec3f, tm: vec3f) -> u32 {
   ret |= u32(select(0, 1 << b, tm[b] < c));
   return ret;
 }
-fn rayoctree(vro: vec3f, vrd: vec3f) -> f32 {
+fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd; var mirrormask: u32 = 0;
-  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
+  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 1; }
   if(rd.y < 0) { ro.y = 1 - ro.y; rd.y = -rd.y; mirrormask |= 2; }
-  if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 1; }
+  if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 4; }
   let t0 = (vec3(0) - ro) / rd; let t1 = (vec3(1) - ro) / rd;
   if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
   if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
-  var step: u32 = 0; var si: i32 = 0;
-  var stack: array<OctreeStack, 10>;
-  // for(var i = 0; i < 10; i++) { stack[i] = OctreeStack(); }
-  let state = &stack[si];
-  (*state).pos = vec3(0);
-  (*state).t0 = t0; (*state).t1 = t1; (*state).state = 0;
+  let tm = 0.5 * (t0 + t1);
+  var i = firstnode(t0, tm);
+  let pos = vec3f(0);
   loop {
-    let state = &stack[si];
-    switch ((*state).state) {
-      case 0 {
-        (*state).tm = 0.5 * ((*state).t0 + (*state).t1);
-        (*state).i = firstnode((*state).t0, (*state).tm);
-        (*state).state = 1;
-        // if((*state).state == 1) { return 1; }
-      } case 1 {
-        // return 1;
-        if((*state).state == 1) { return 1; }
-        let mask = vec3<bool>(bool((*state).i & 1),
-          bool(((*state).i >> 1) & 1), bool(((*state).i >> 2) & 1));
-        let nt0 = select((*state).t0, (*state).tm, mask);
-        let nt1 = select((*state).tm, (*state).t1, mask);
-        (*state).mask = mask; (*state).state = 2;
+    let mask = vec3<bool>(bool((i >> 2) & 1), bool((i >> 1) & 1), bool(i & 1));
+    let nt0 = select(t0, tm, mask); let nt1 = select(tm, t1, mask);
+    
+    let realindex = i ^ mirrormask;
+    // let realmask = vec3<bool>(bool(realindex & 1),
+    //   bool((realindex >> 1) & 1), bool((realindex >> 2) & 1));
+    let realmask = vec3<bool>(bool((realindex >> 2) & 1),
+      bool((realindex >> 1) & 1), bool(realindex & 1));
+    // let npos = pos + select(vec3f(0), vec3f(0.5), realmask);
+    // let r = rnd(vec4f(npos, 0.5));
 
-        let size = 1 / f32(1 << u32(si + 1));
-        let realindex = (*state).i ^ mirrormask;
-        let realmask = vec3<bool>(bool(realindex & 1),
-          bool((realindex >> 1) & 1), bool((realindex >> 2) & 1));
-        let npos = (*state).pos + select(vec3(0), vec3(size), realmask);
-        let v = rnd(vec4f(npos, size));
-        if(v < 0.5) { continue; } // empty
-        if(si >= 1) { return 1; }
-
-        si++; let nstate = &stack[si];
-        (*nstate).pos = npos;
-        (*nstate).t0 = nt0; (*nstate).t1 = nt1; (*nstate).state = 0;
-      } case 2 {
-        let v = select((*state).tm, (*state).t1, (*state).mask);
-        let i = nextnode_lut[(*state).i][minindex(v)]; (*state).i = i;
-        if(i >= 8) { return 1; }
-        if(i < 8) { return 1; }
-        if(i < 8) { (*state).state = 1; } else { step++; si--; }
-      } default {}
-    } if(si < 0 || si >= 10 || step >= 1000) { break; }
+    // (*clr) = vec3f(mask); return 1;
+    (*clr) = vec3f(realmask); return 1;
+    
+    i = nextnode_lut[i][minindex(select(tm, t1, mask))];
+    if(i >= 8) { break; }
   } return -1;
+  
+  // var step: u32 = 0; var si: i32 = 0;
+  // var stack: array<OctreeStack, 10>;
+  // let state = &stack[si];
+  // (*state).pos = vec3(0);
+  // (*state).t0 = t0; (*state).t1 = t1; (*state).state = 0;
+  // loop {
+  //   let state = &stack[si];
+  //   switch ((*state).state) {
+  //     case 0 {
+  //       (*state).tm = 0.5 * ((*state).t0 + (*state).t1);
+  //       (*state).i = firstnode((*state).t0, (*state).tm);
+  //       (*state).state = 1;
+  //     }
+  //     case 1 {
+  //       let mask = vec3<bool>(bool((*state).i & 1),
+  //       bool(((*state).i >> 1) & 1), bool(((*state).i >> 2) & 1));
+  //       let nt0 = select((*state).t0, (*state).tm, mask);
+  //       let nt1 = select((*state).tm, (*state).t1, mask);
+  //       (*state).mask = mask; (*state).state = 2;
+        
+  //       let size = 1 / f32(1 << u32(si + 1));
+  //       let realindex = (*state).i ^ mirrormask;
+  //       let realmask = vec3<bool>(bool(realindex & 1),
+  //       bool((realindex >> 1) & 1), bool((realindex >> 2) & 1));
+  //       let npos = (*state).pos + select(vec3(0), vec3(size), realmask);
+  //       let v = rnd(vec4f(npos, size));
+  //       if(v < 0.5) { continue; } // empty
+  //       if(si >= 0) { return 1; }
+        
+  //       si++; let nstate = &stack[si];
+  //       (*nstate).pos = npos;
+  //       (*nstate).t0 = nt0; (*nstate).t1 = nt1; (*nstate).state = 0;
+  //     }
+  //     case 2 {
+  //       let v = select((*state).tm, (*state).t1, (*state).mask);
+  //       let i = nextnode_lut[(*state).i][minindex(v)]; (*state).i = i;
+  //       if(i < 8) { (*state).state = 1; } else { step++; si--; }
+  //     } default {}
+  //   } if(si < 0 || si >= 10 || step >= 1000) { break; }
+  // } return -1;
 }`
 
 const module = device.createShaderModule({
@@ -161,7 +182,8 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
   if(raysphere(ro, rd, vec3(0, 0, 10), 0.1)) { return vec4(0, 0, 1, 1); }
   if(raysphere(ro, rd, vec3(0, 0, -10), 0.1)) { return vec4(1, 0, 1, 1); }
 
-  if(rayoctree(ro, rd) > 0) { return vec4(0, 0, 0, 1); }
+  var clr: vec3f;
+  if(rayoctree(ro, rd, &clr) > 0) { return vec4(clr, 1); }
 
   let skyclr = vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
   return vec4(skyclr, 1);
@@ -238,6 +260,7 @@ const loop = t => {
     const cv = normalize(cross(cu, rd))
     movero(cv, -1)
   }
+  log(...rd.map(v => v.toFixed(2)))
 
   uniforms.resolution[0] = cvs.width
   uniforms.resolution[1] = cvs.height
