@@ -39,7 +39,7 @@ const a = new Uint32Array
 const gen = (node = [], level = 0) => {
   for (let i = 0; i < 4; i++) {
     node[i] = []
-    if (Math.random() < 0.7 && level < 5) {
+    if (Math.random() < 0 && level < 1) {
       gen(node[i], level + 1)
     }
   } return node
@@ -49,6 +49,9 @@ const ms = 500, msd2 = ms * 0.5
 const mapsize = (x, y) => [
   x * (cvs.width - ms), y * (cvs.height - ms)]
 const mapcoord = (x, y) => mapsize(x, y).map(v => v + msd2)
+const revesemap = (x, y) => [
+  (x * devicePixelRatio - msd2) / (cvs.width - ms),
+  (y * devicePixelRatio - msd2) / (cvs.height - ms)]
 
 const drawquadtree = (node, x = 0, y = 0, s = 1) => {
   if (!node) { return } const sd2 = s * 0.5
@@ -138,9 +141,30 @@ const traversal = (ray, bx, by, bs, node) => {
   }
 }
 
+const minindex = (x, y, z) => (y < z && y < x) + (z < y && z < x) * 2;
+const maxindex = (x, y, z) => (y > z && y > x) + (z > y && z > x) * 2;
 const traversalonetime = () => {
   counter = 0, rectarray = [], pointarray = [], step = 0
-  traversal(ray, 0, 0, 1, root)
+  // traversal(ray, 0, 0, 1, root)
+  let mirrormask = 0
+  let [rox, roy, rdx, rdy] = ray
+  if(rdx < 0) {
+    rox = 1 - rox;
+    rdx = -rdx;
+    mirrormask |= 1;
+  }
+  if(rdy < 0) {
+    roy = 1 - roy;
+    rdy = -rdy;
+    mirrormask |= 2;
+  }
+  let tx0 = (0 - rox) / rdx;
+  let ty0 = (0 - roy) / rdy;
+  let tx1 = (1 - rox) / rdx;
+  let ty1 = (1 - roy) / rdy;
+  let txm = (tx0 + tx1) * 0.5;
+  let tym = (ty0 + ty1) * 0.5;
+  log('0', tx0, ty0,'m', txm, tym, '1', tx1, ty1);
 }
 setTimeout(traversalonetime, 100);
 
@@ -150,10 +174,22 @@ window.addEventListener('keydown', e => {
   if (k === '=') { step++ }
   else if (k === '-') { step-- }
 })
-cvs.onpointerdown = e => {
+let change_dir = false
+window.addEventListener('pointermove', e => {
+  if (change_dir) {
+    const [tx, ty] = revesemap(e.pageX, e.pageY);
+    [ray[2], ray[3]] = [tx - ray[0], ty - ray[1]];
+    traversalonetime()
+  }
+})
+window.addEventListener('pointerup', e => {
+  change_dir = false
+})
+window.addEventListener('pointerdown', e => {
   if (e.button === 0) {
-    if (e.shiftKey) { step-- }
-    else { step++ }
+    change_dir = true;
+    [ray[0], ray[1]] = revesemap(e.pageX, e.pageY)
+    traversalonetime()
   } else if (e.button === 1) {
     root = gen()
     traversalonetime()
@@ -162,8 +198,8 @@ cvs.onpointerdown = e => {
     Math.random() * 2 - 1, Math.random() * 2 - 1]
     traversalonetime()
   }
-}
-cvs.oncontextmenu = e => e.preventDefault()
+})
+window.oncontextmenu = e => e.preventDefault()
 
 const loop = t => {
   requestAnimationFrame(loop)

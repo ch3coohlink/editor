@@ -76,14 +76,23 @@ const nextnode_lut = array<vec3u, 8>(
   vec3(8, 6, 5), vec3(8, 7, 8), vec3(8, 8, 7), vec3(8, 8, 8));
 const firstnode_luta = vec3u(1, 0, 0);
 const firstnode_lutb = vec3u(2, 2, 1);
-fn firstnode(t0: vec3f, tm: vec3f) -> u32 {
-  let mi = maxindex(t0);
-  let a = firstnode_luta[mi];
-  let b = firstnode_lutb[mi];
-  let c = t0[mi]; var ret: u32 = 0;
-  ret |= u32(select(0, 1 << (2 - a), tm[a] < c));
-  ret |= u32(select(0, 1 << (2 - b), tm[b] < c));
-  return ret;
+fn firstnode(t0: vec3f, tm: vec3f, t1: vec3f) -> u32 {
+  if(all(t0 < vec3(0)) && all(t1 > vec3(0))) {
+    var ret: u32 = 0;
+    if(tm.x < 0) { ret |= 4; }
+    if(tm.y < 0) { ret |= 2; }
+    if(tm.z < 0) { ret |= 1; }
+    return ret;
+  } else {
+    let mi = maxindex(t0);
+    let a = firstnode_luta[mi];
+    let b = firstnode_lutb[mi];
+    let c = t0[mi];
+    var ret: u32 = 0;
+    ret |= u32(select(0, 1 << (2 - a), tm[a] < c));
+    ret |= u32(select(0, 1 << (2 - b), tm[b] < c));
+    return ret;
+  }
 }
 fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd; var mirrormask: u32 = 0;
@@ -94,7 +103,7 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
   if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
   let tm = 0.5 * (t0 + t1);
-  var i = firstnode(t0, tm);
+  var i = firstnode(t0, tm, t1);
   let pos = vec3f(0);
   loop {
     let mask = vec3<bool>(bool((i >> 2) & 1), bool((i >> 1) & 1), bool(i & 1));
@@ -113,7 +122,7 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
     i = nextnode_lut[i][minindex(select(tm, t1, mask))];
     if(i >= 8) { break; }
   } return -1;
-  
+
   // var step: u32 = 0; var si: i32 = 0;
   // var stack: array<OctreeStack, 10>;
   // let state = &stack[si];
@@ -234,7 +243,7 @@ const loop = t => {
   t /= 1000; let dt = Math.min(t - pt, 1 / 60); pt = t
   // log((dt * 1000).toFixed(0))
 
-  let spd = 10, movero = (rd, s = 1) => {
+  let spd = 1, movero = (rd, s = 1) => {
     ro[0] += rd[0] * spd * dt * s
     ro[1] += rd[1] * spd * dt * s
     ro[2] += rd[2] * spd * dt * s
