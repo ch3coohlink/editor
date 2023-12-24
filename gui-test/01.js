@@ -81,15 +81,15 @@ fn firstnode(t0: vec3f, tm: vec3f) -> u32 {
   let a = firstnode_luta[mi];
   let b = firstnode_lutb[mi];
   let c = t0[mi]; var ret: u32 = 0;
-  ret |= u32(select(0, 1 << a, tm[a] < c));
-  ret |= u32(select(0, 1 << b, tm[b] < c));
+  ret |= u32(select(0, 1 << (2 - a), tm[a] < c));
+  ret |= u32(select(0, 1 << (2 - b), tm[b] < c));
   return ret;
 }
 fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd; var mirrormask: u32 = 0;
-  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 1; }
+  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
   if(rd.y < 0) { ro.y = 1 - ro.y; rd.y = -rd.y; mirrormask |= 2; }
-  if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 4; }
+  if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 1; }
   let t0 = (vec3(0) - ro) / rd; let t1 = (vec3(1) - ro) / rd;
   if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
   if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
@@ -101,15 +101,14 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
     let nt0 = select(t0, tm, mask); let nt1 = select(tm, t1, mask);
     
     let realindex = i ^ mirrormask;
-    // let realmask = vec3<bool>(bool(realindex & 1),
-    //   bool((realindex >> 1) & 1), bool((realindex >> 2) & 1));
     let realmask = vec3<bool>(bool((realindex >> 2) & 1),
       bool((realindex >> 1) & 1), bool(realindex & 1));
-    // let npos = pos + select(vec3f(0), vec3f(0.5), realmask);
-    // let r = rnd(vec4f(npos, 0.5));
-
+    let npos = pos + select(vec3f(0), vec3f(0.5), realmask);
+    let r = rnd(vec4f(npos, 0.5));
+    if(r < 0.5) { (*clr) = vec3f(realmask); return 1; }
     // (*clr) = vec3f(mask); return 1;
-    (*clr) = vec3f(realmask); return 1;
+    // (*clr) = vec3f(realmask); return 1;
+    // (*clr) = select(tm, t1, mask); return 1;
     
     i = nextnode_lut[i][minindex(select(tm, t1, mask))];
     if(i >= 8) { break; }
