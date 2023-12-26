@@ -73,13 +73,7 @@ vec2(-1, 1), vec2(1, 1), vec2(-1, -1), vec2(-1, -1), vec2(1, 1), vec2(1, -1));
 const cs = device.createShaderModule({
   code: /*WGSL*/`${ubdef}\n${helpfn}
 @group(0) @binding(1) var screen: texture_storage_2d<rgba16float, write>;
-const checkclr = vec3f(0);
 fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
-  if(id.x % 2 != 0 && id.y % 2 != 0) { return checkclr; }
-  if(id.x % 2 == 0 && id.y % 2 == 0) { return checkclr; }
-  // if(id.x % 2 != 0 && id.y % 2 == 0) { return checkclr; }
-  // if(id.x % 2 == 0 && id.y % 2 != 0) { return checkclr; }
-
   var uv = (id.xy + 0.5
      - resolution.xy * 0.5) / resolution.y; uv.y = -uv.y;
   let ro = uniforms.campos;
@@ -89,20 +83,46 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   let cam = mat3x3f(cu, cv, cw);
   let rd = cam * normalize(vec3f(uv, 1));
 
-  if(raysphere(ro, rd, vec3(10, 0, 0), 0.1)) { return vec3(1, 0, 0); }
-  if(raysphere(ro, rd, vec3(-10, 0, 0), 0.1)) { return vec3(1, 1, 0); }
-  if(raysphere(ro, rd, vec3(0, 10, 0), 0.1)) { return vec3(0, 1, 0); }
-  if(raysphere(ro, rd, vec3(0, -10, 0), 0.1)) { return vec3(0, 1, 1); }
-  if(raysphere(ro, rd, vec3(0, 0, 10), 0.1)) { return vec3(0, 0, 1); }
-  if(raysphere(ro, rd, vec3(0, 0, -10), 0.1)) { return vec3(1, 0, 1); }
+  var si = 0i; var counter = 0u;
+  var sa = array<u32, 10>();
+  loop {
+    switch (sa[si]) {
+      case 0 {
+        sa[si] = 1;
+      }
+      case 1 {
+        // return vec3(1);
+        if(si == 0) { return vec3(1); }
+        // if(sa[si] == 1) { return vec3(1); }
+        sa[si] = 2;
+        si += 1;
+        if(si == 1) { return vec3(1); }
+      }
+      case 2 {
+        sa[si] = 1;
+        if(si == 0) { return vec3(1); }
+      }
+      default {}
+    }
+    counter++;
+    if si < 0 || counter > 100 { break; }
+  } return vec3(0);
 
-  return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
+  // if(raysphere(ro, rd, vec3(10, 0, 0), 0.1)) { return vec3(1, 0, 0); }
+  // if(raysphere(ro, rd, vec3(-10, 0, 0), 0.1)) { return vec3(1, 1, 0); }
+  // if(raysphere(ro, rd, vec3(0, 10, 0), 0.1)) { return vec3(0, 1, 0); }
+  // if(raysphere(ro, rd, vec3(0, -10, 0), 0.1)) { return vec3(0, 1, 1); }
+  // if(raysphere(ro, rd, vec3(0, 0, 10), 0.1)) { return vec3(0, 0, 1); }
+  // if(raysphere(ro, rd, vec3(0, 0, -10), 0.1)) { return vec3(1, 0, 1); }
+  // return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
   if (id.x >= resolution.x || id.y >= resolution.y) { return; }
   textureStore(screen, uid.xy, vec4f(rendering(id.xy, resolution), 1));
 }`})
+
+log(await cs.getCompilationInfo())
 
 const cpipe = device.createComputePipeline({
   layout: 'auto', compute: { module: cs, entryPoint: 'main' }

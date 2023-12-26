@@ -5,10 +5,12 @@ document.body.append(cvs)
 new ResizeObserver(() => {
   const w = document.body.clientWidth, h = document.body.clientHeight
   const r = window.devicePixelRatio
-  cvs.style.width = ((cvs.width = Math.floor(w * r)) / r) + 'px'
-  cvs.style.height = ((cvs.height = Math.floor(h * r)) / r) + 'px'
-}).observe(cvs)
-cvs.style.width = cvs.style.height = "100%"
+  const wr = Math.floor(w * r), hr = Math.floor(h * r)
+  if (cvs.width !== wr) { cvs.width = wr }
+  if (cvs.height !== hr) { cvs.height = hr }
+  cvs.style.width = (wr / r) + 'px'
+  cvs.style.height = (hr / r) + 'px'
+}).observe(document.body)
 
 const adapter = await navigator.gpu.requestAdapter()
 const device = await adapter.requestDevice()
