@@ -122,8 +122,6 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   textureStore(screen, uid.xy, vec4f(rendering(id.xy, resolution), 1));
 }`})
 
-log(await cs.getCompilationInfo())
-
 const cpipe = device.createComputePipeline({
   layout: 'auto', compute: { module: cs, entryPoint: 'main' }
 })
