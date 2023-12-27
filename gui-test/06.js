@@ -106,7 +106,7 @@ fn firstnode(t0: vec3f, tm: vec3f, t1: vec3f) -> u32 {
 }
 var<private> mirrormask: u32 = 0;
 var<private> step: u32 = 0;
-const recursion_level = 1;
+const recursion_level = 2;
 const step_limit = 100;
 fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd;
@@ -119,41 +119,37 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   
   var step: u32 = 0; var level: u32 = 0;
   var stack: array<u32, recursion_level>;
-  var exit = false; var pos = vec3f(0);
-  let tm = 0.5 * (t0 + t1); stack[level] = firstnode(t0, tm, t1);
-  // var mask: vec3<bool>;
+  var pos = vec3f(0); var tm = 0.5 * (t0 + t1);
+  stack[level] = firstnode(t0, tm, t1);
   loop {
     let ci = stack[level]; let ri = ci ^ mirrormask; // real index
-    let size = 1 / f32(1 << u32(level + 1));
     let rm = vec3(bool((ri >> 2) & 1), bool((ri >> 1) & 1), bool(ri & 1));
     let mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
+    let size = 1 / f32(1 << u32(level + 1));
     let npos = pos + select(vec3(0), vec3(size), rm);
     let v = rnd(vec4f(npos, size));
     if(v < 0.5) { // empty, step
-      let tm = 0.5 * (t0 + t1);
-      let v = select(tm, t1, mask);
-      let i = nextnode_lut[ci][minindex(v)];
-      stack[level] = i;
+      let i = nextnode_lut[ci][minindex(select(tm, t1, mask))];
       if(i > 7) { // exit this level
         if(level == 0) { break; } else { // get all data back
           level--; let ci = stack[level]; let ri = ci ^ mirrormask;
           let rm = vec3(bool((ri >> 2) & 1), bool((ri >> 1) & 1), bool(ri & 1));
           let mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
+          let size = 1 / f32(1 << u32(level + 1));
           if(mask.x) { t0.x = t0.x * 2 - t1.x; } else { t1.x = t1.x * 2 - t0.x; }
           if(mask.y) { t0.y = t0.y * 2 - t1.y; } else { t1.y = t1.y * 2 - t0.y; }
           if(mask.z) { t0.z = t0.z * 2 - t1.z; } else { t1.z = t1.z * 2 - t0.z; }
-          pos -= select(vec3(0), vec3(size * 2), rm);
+          pos -= select(vec3(0), vec3(size), rm); tm = 0.5 * (t0 + t1);
         }
-      }
-    } else if(level >= recursion_level) { *clr = vec3f(rm); break; } else { // not empty, traverse
-      // mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
-      var tm = 0.5 * (t0 + t1);
-      t0 = select(t0, tm, mask); t1 = select(tm, t1, mask); level++;
-      tm = 0.5 * (t0 + t1); stack[level] = firstnode(t0, tm, t1);
-    } step++; if(step > step_limit) { *clr = vec3(1, 0, 0); return 1; }
+      } else { stack[level] = i; }
+    } else if(level >= recursion_level) { *clr = vec3f(rm); return 1; } else { // not empty, traverse
+      t0 = select(t0, tm, mask); t1 = select(tm, t1, mask);
+      tm = 0.5 * (t0 + t1); pos = npos;
+      level++; stack[level] = firstnode(t0, tm, t1);
+    } step++; if(step > step_limit) { *clr = vec3(f32(step) / (step_limit * 2)); return 1; }
   }
   // *clr = vec3(f32(step) / step_limit);
-  return 1;
+  return -1;
 }`
 
 const ds = device.createShaderModule({
@@ -182,7 +178,8 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   let rd = cam * normalize(vec3f(uv, 1));
   var clr: vec3f;
   if(rayoctree(ro, rd, &clr) > 0) { return clr; }
-  return vec3(0);
+  // return vec3(0);
+  return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
