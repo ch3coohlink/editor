@@ -73,13 +73,13 @@ struct OctreeStack {
   mask: vec3<bool>,
   pos: vec3f,
 }
-fn rnd(ov: vec4f) -> f32 {
+fn rnd(v: vec4f) -> f32 {
+  return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
+}
+fn rnd2(ov: vec4f) -> f32 {
   var v = fract(ov  * vec4(.1031, .1030, .0973, .1099));
   v += dot(v, v.wzxy+33.33);
   return fract((v.x + v.y) * (v.z + v.w));
-}
-fn rnd2(v: vec4f) -> f32 {
-  return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
 }
 const nextnode_lut = array<vec3u, 8>(
   vec3(4, 2, 1), vec3(5, 3, 8), vec3(6, 8, 3), vec3(7, 8, 8),
@@ -106,54 +106,53 @@ fn firstnode(t0: vec3f, tm: vec3f, t1: vec3f) -> u32 {
 }
 var<private> mirrormask: u32 = 0;
 var<private> step: u32 = 0;
-const recursion_level = 10;
-const step_limit = 50;
+const recursion_level = 1;
+const step_limit = 100;
 fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd;
   if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
   if(rd.y < 0) { ro.y = 1 - ro.y; rd.y = -rd.y; mirrormask |= 2; }
   if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 1; }
-  let t0 = (vec3(0) - ro) / rd; let t1 = (vec3(1) - ro) / rd;
+  var t0 = (vec3(0) - ro) / rd; var t1 = (vec3(1) - ro) / rd;
   if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
   if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
   
-  var step: u32 = 0; var si: i32 = 0;
-  var stack: array<OctreeStack, recursion_level>;
-  let state = &stack[si]; (*state).pos = vec3(0);
-  (*state).t0 = t0; (*state).t1 = t1; (*state).state = 0;
+  var step: u32 = 0; var level: u32 = 0;
+  var stack: array<u32, recursion_level>;
+  var exit = false; var pos = vec3f(0);
+  let tm = 0.5 * (t0 + t1); stack[level] = firstnode(t0, tm, t1);
+  // var mask: vec3<bool>;
   loop {
-    let state = &stack[si]; let cs = (*state).state;
-    if(cs == 0) {
-      (*state).tm = 0.5 * ((*state).t0 + (*state).t1);
-      (*state).i = firstnode((*state).t0, (*state).tm, (*state).t1);
-      (*state).state = 1;
-    } else if(cs == 1) {
-      step++;
-      let mask = vec3<bool>(bool(((*state).i >> 2) & 1),
-        bool(((*state).i >> 1) & 1), bool((*state).i & 1));
-      let nt0 = select((*state).t0, (*state).tm, mask);
-      let nt1 = select((*state).tm, (*state).t1, mask);
-      (*state).mask = mask; (*state).state = 2;
-
-      let size = 1 / f32(1 << u32(si + 1));
-      let realindex = (*state).i ^ mirrormask;
-      let realmask = vec3<bool>(bool((realindex >> 2) & 1),
-        bool((realindex >> 1) & 1), bool(realindex & 1));
-      let npos = (*state).pos + select(vec3(0), vec3(size), realmask);
-      let v = rnd(vec4f(npos, size));
-      if(v < 0.4) { continue; } // empty
-
-      si++; let nstate = &stack[si];
-      (*nstate).pos = npos;
-      (*nstate).t0 = nt0; (*nstate).t1 = nt1; (*nstate).state = 0;
-    } else if(cs == 2) {
-      let v = select((*state).tm, (*state).t1, (*state).mask);
-      let i = nextnode_lut[(*state).i][minindex(v)]; (*state).i = i;
-      if(i < 8) { (*state).state = 1; } else { si--; }
-    } if(si < 0 || si >= recursion_level) { break; }
-    if (step > step_limit) { *clr = vec3(1, 0, 0); return 1; }
+    let ci = stack[level]; let ri = ci ^ mirrormask; // real index
+    let size = 1 / f32(1 << u32(level + 1));
+    let rm = vec3(bool((ri >> 2) & 1), bool((ri >> 1) & 1), bool(ri & 1));
+    let mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
+    let npos = pos + select(vec3(0), vec3(size), rm);
+    let v = rnd(vec4f(npos, size));
+    if(v < 0.5) { // empty, step
+      let tm = 0.5 * (t0 + t1);
+      let v = select(tm, t1, mask);
+      let i = nextnode_lut[ci][minindex(v)];
+      stack[level] = i;
+      if(i > 7) { // exit this level
+        if(level == 0) { break; } else { // get all data back
+          level--; let ci = stack[level]; let ri = ci ^ mirrormask;
+          let rm = vec3(bool((ri >> 2) & 1), bool((ri >> 1) & 1), bool(ri & 1));
+          let mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
+          if(mask.x) { t0.x = t0.x * 2 - t1.x; } else { t1.x = t1.x * 2 - t0.x; }
+          if(mask.y) { t0.y = t0.y * 2 - t1.y; } else { t1.y = t1.y * 2 - t0.y; }
+          if(mask.z) { t0.z = t0.z * 2 - t1.z; } else { t1.z = t1.z * 2 - t0.z; }
+          pos -= select(vec3(0), vec3(size * 2), rm);
+        }
+      }
+    } else if(level >= recursion_level) { *clr = vec3f(rm); break; } else { // not empty, traverse
+      // mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
+      var tm = 0.5 * (t0 + t1);
+      t0 = select(t0, tm, mask); t1 = select(tm, t1, mask); level++;
+      tm = 0.5 * (t0 + t1); stack[level] = firstnode(t0, tm, t1);
+    } step++; if(step > step_limit) { *clr = vec3(1, 0, 0); return 1; }
   }
-  *clr = vec3(f32(step) / step_limit);
+  // *clr = vec3(f32(step) / step_limit);
   return 1;
 }`
 
@@ -248,6 +247,7 @@ window.addEventListener('pointermove', e => {
 const pressed = new Set
 window.addEventListener('keydown', e => {
   pressed.add(e.key.toLowerCase())
+  e.preventDefault()
 })
 window.addEventListener('keyup', e => {
   pressed.delete(e.key.toLowerCase())
@@ -257,15 +257,16 @@ window.addEventListener('keyup', e => {
 let st = performance.now() / 1000, pt = st
 const loop = t => {
   t /= 1000; let dt = t - pt; pt = t
-  log(1/dt)
+  // log(1 / dt)
   dt = Math.min(dt, 1 / 60)
 
-  let spd = 0.1, movero = (rd, s = 1) => {
+  let spd = 0.001, movero = (rd, s = 1) => {
     ro[0] += rd[0] * spd * dt * s
     ro[1] += rd[1] * spd * dt * s
     ro[2] += rd[2] * spd * dt * s
   }
-  if (pressed.has('shift')) { spd *= 10 }
+  if (pressed.has('shift')) { spd *= 1000 }
+  if (pressed.has('alt')) { spd *= 100 }
   if (pressed.has('h')) { ro = [0, 0, 0] }
   if (pressed.has('e')) { movero(rd) }
   if (pressed.has('d')) { movero(rd, -1) }
