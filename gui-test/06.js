@@ -64,15 +64,6 @@ fn minindex(v: vec3f) -> i32 {
 fn maxindex(v: vec3f) -> i32 {
   return i32(v.y > v.z && v.y > v.x) + i32(v.z > v.y && v.z > v.x) * 2;
 }
-struct OctreeStack {
-  t0: vec3f,
-  state: u32,
-  t1: vec3f,
-  i: u32,
-  tm: vec3f,
-  mask: vec3<bool>,
-  pos: vec3f,
-}
 fn rnd(v: vec4f) -> f32 {
   return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
 }
@@ -249,7 +240,9 @@ window.addEventListener('pointermove', e => {
 const pressed = new Set
 window.addEventListener('keydown', e => {
   pressed.add(e.key.toLowerCase())
-  e.preventDefault()
+  if (e.shiftKey || e.ctrlKey || e.altKey) {
+    e.preventDefault()
+  }
 })
 window.addEventListener('keyup', e => {
   pressed.delete(e.key.toLowerCase())
