@@ -263,7 +263,9 @@ window.addEventListener('pointermove', e => {
 const pressed = new Set
 window.addEventListener('keydown', e => {
   pressed.add(e.key.toLowerCase())
-  e.preventDefault()
+  if (e.shiftKey || e.ctrlKey || e.altKey) {
+    e.preventDefault()
+  }
 })
 window.addEventListener('keyup', e => {
   pressed.delete(e.key.toLowerCase())
