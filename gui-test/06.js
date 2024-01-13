@@ -15,7 +15,7 @@ new ResizeObserver(() => {
   if ($.createtexture && changed) { createtexture() }
 }).observe(document.body)
 
-const adapter = await navigator.gpu.requestAdapter()
+const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" })
 const device = await adapter.requestDevice()
 const cvsctx = cvs.getContext("webgpu")
 const format = navigator.gpu.getPreferredCanvasFormat()
@@ -64,18 +64,15 @@ fn minindex(v: vec3f) -> i32 {
 fn maxindex(v: vec3f) -> i32 {
   return i32(v.y > v.z && v.y > v.x) + i32(v.z > v.y && v.z > v.x) * 2;
 }
-struct OctreeStack {
-  t0: vec3f,
-  state: u32,
-  t1: vec3f,
-  i: u32,
-  tm: vec3f,
-  mask: vec3<bool>,
-  pos: vec3f,
-}
 fn rnd(v: vec4f) -> f32 {
   return fract(4e4 * sin(dot(v, vec4(13.46, 41.74, -73.36, 14.24)) + 17.34));
 }
+// const HASHSCALE3 = vec3(.1031, .1030, .0973);
+// fn hash33(vec3f p3) -> vec3f {
+//   p3 = fract(p3 * HASHSCALE3);
+//   p3 += dot(p3, p3.yxz + 19.19);
+//   return fract((p3.xxy + p3.yxx) * p3.zyx);
+// }
 fn rnd2(ov: vec4f) -> f32 {
   var v = fract(ov  * vec4(.1031, .1030, .0973, .1099));
   v += dot(v, v.wzxy+33.33);
@@ -94,32 +91,38 @@ fn firstnode(t0: vec3f, tm: vec3f, t1: vec3f) -> u32 {
     if(tm.z < 0) { ret |= 1; }
     return ret;
   } else {
-    let mi = maxindex(t0);
-    let a = firstnode_luta[mi];
-    let b = firstnode_lutb[mi];
-    let c = t0[mi];
-    var ret: u32 = 0;
-    ret |= u32(select(0, 1 << (2 - a), tm[a] < c));
-    ret |= u32(select(0, 1 << (2 - b), tm[b] < c));
+    var c2 = max(t0.x, max(t0.y, t0.z));
+    var ret: u32 = select(4u, 0u, c2 < tm.x);
+    ret = select(ret | 2, ret, c2 < tm.y);
+    ret = select(ret | 1, ret, c2 < tm.z);
     return ret;
+    // let mi = maxindex(t0);
+    // let a = firstnode_luta[mi];
+    // let b = firstnode_lutb[mi];
+    // let c = t0[mi];
+    // var ret: u32 = 0;
+    // ret |= u32(select(0, 1 << (2 - a), tm[a] < c));
+    // ret |= u32(select(0, 1 << (2 - b), tm[b] < c));
+    // return ret;
   }
 }
 var<private> mirrormask: u32 = 0;
 var<private> step: u32 = 0;
-const recursion_level = 20;
+// const recursion_level = 4;
+const recursion_level = 21;
 const step_limit = 100;
 fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   var ro = vro; var rd = vrd;
-  if(rd.x < 0) { ro.x = 1 - ro.x; rd.x = -rd.x; mirrormask |= 4; }
-  if(rd.y < 0) { ro.y = 1 - ro.y; rd.y = -rd.y; mirrormask |= 2; }
-  if(rd.z < 0) { ro.z = 1 - ro.z; rd.z = -rd.z; mirrormask |= 1; }
-  var t0 = (vec3(0) - ro) / rd; var t1 = (vec3(1) - ro) / rd;
+  if(rd.x < 0) { ro.x = -ro.x; rd.x = -rd.x; mirrormask |= 4; }
+  if(rd.y < 0) { ro.y = -ro.y; rd.y = -rd.y; mirrormask |= 2; }
+  if(rd.z < 0) { ro.z = -ro.z; rd.z = -rd.z; mirrormask |= 1; }
+  var t0 = (vec3(-1) - ro) / rd; var t1 = (vec3(1) - ro) / rd;
   if(max(max(t0.x, t0.y), t0.z) >= min(min(t1.x, t1.y), t1.z)) { return -1; }
   if(t1.x < 0 || t1.y < 0 || t1.z < 0) { return -1; }
   
   var step: u32 = 0; var level: i32 = 0;
   var stack: array<u32, recursion_level>;
-  var pos = vec3f(0); var tm = 0.5 * (t0 + t1);
+  var pos = vec3f(-1); var tm = 0.5 * (t0 + t1);
   stack[level] = firstnode(t0, tm, t1);
   var exit = false;
   loop {
@@ -127,7 +130,7 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
     let ri = ci ^ mirrormask; // real index
     let rm = vec3(bool((ri >> 2) & 1), bool((ri >> 1) & 1), bool(ri & 1));
     let mask = vec3(bool((ci >> 2) & 1), bool((ci >> 1) & 1), bool(ci & 1));
-    let size = 1 / f32(1 << u32(level + 1));
+    let size = 2 / f32(1 << u32(level + 1));
     let npos = pos + select(vec3(0), vec3(size), rm);
     let v = rnd(vec4f(npos, size));
     // if (exit || v < (uniforms.time * 0.1) % 1) { // pop and move to next
@@ -144,17 +147,28 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
         if(mask.z) { t0.z = t0.z * 2 - t1.z; } else { t1.z = t1.z * 2 - t0.z; }
         pos -= select(vec3(0), vec3(size * 2), rm); tm = 0.5 * (t0 + t1); exit = true;
       }
-    } else if(level >= recursion_level - 1) { break; } else { // push
+    } else if(level >= recursion_level - 1) {
+      let val = fract(dot(pos, vec3(15.23, 754.345, 3.454)));
+      var normal = vec3f(0);
+      normal[maxindex(select(t0, tm, mask))] = 1;
+      normal *= -sign(vrd);
+      let color = sin(val * vec3(39.896, 57.3225, 48.25)) * 0.5 + 0.5;
+      // *clr = color * (normal * 0.25 + 0.75);
+      *clr = vec3(1) * (normal * 0.25 + 0.75);
+      // *clr = normal;
+      *clr = *clr * vec3(f32(step) / step_limit);
+      return 1;
+    } else { // push
       t0 = select(t0, tm, mask); t1 = select(tm, t1, mask);
       tm = 0.5 * (t0 + t1); pos = npos;
       level++; stack[level] = firstnode(t0, tm, t1);
     }
     if(step > step_limit) {
-      *clr = vec3(1,0,0); return 1;
+      return -1;
+      // *clr = vec3(1,0,0); return 1;
     }
   }
-  *clr = vec3(f32(step) / step_limit);
-  return 1;
+  return -1;
 }`
 
 const ds = device.createShaderModule({
@@ -183,8 +197,8 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   let rd = cam * normalize(vec3f(uv, 1));
   var clr: vec3f;
   if(rayoctree(ro, rd, &clr) > 0) { return clr; }
-  return vec3(0);
-  // return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
+  // return vec3(0);
+  return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
@@ -290,15 +304,9 @@ const loop = t => {
     movero(cv, -1)
   }
 
-  uniforms.resolution[0] = cvs.width
-  uniforms.resolution[1] = cvs.height
-  uniforms.time[0] = t
-  uniforms.campos[0] = ro[0]
-  uniforms.campos[1] = ro[1]
-  uniforms.campos[2] = ro[2]
-  uniforms.camdir[0] = rd[0]
-  uniforms.camdir[1] = rd[1]
-  uniforms.camdir[2] = rd[2]
+  uniforms.resolution[0] = cvs.width, uniforms.resolution[1] = cvs.height, uniforms.time[0] = t
+  uniforms.campos[0] = ro[0], uniforms.campos[1] = ro[1], uniforms.campos[2] = ro[2]
+  uniforms.camdir[0] = rd[0], uniforms.camdir[1] = rd[1], uniforms.camdir[2] = rd[2]
   device.queue.writeBuffer(ub, 0, ubarr)
   const enc = device.createCommandEncoder()
 

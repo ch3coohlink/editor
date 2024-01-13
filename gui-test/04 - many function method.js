@@ -120,7 +120,7 @@ fn rayoctree(vro: vec3f, vrd: vec3f, clr: ptr<function, vec3f>) -> f32 {
   return 1;
 }\n`
 
-const recursive_function = (d = 10) => {
+const recursive_function = (d = 12) => {
   let t = l => /*WGSL*/`fn subtree_${l}(t0: vec3f, t1: vec3f, pos: vec3f, clr: ptr<function, vec3f>) -> f32 {
   let tm = 0.5 * (t0 + t1); var i = firstnode(t0, tm, t1);
   loop {
