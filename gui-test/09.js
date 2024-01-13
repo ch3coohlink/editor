@@ -239,8 +239,18 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
-  if (id.x >= resolution.x || id.y >= resolution.y) { return; }
-  textureStore(screen, uid.xy, vec4f(rendering(id.xy, resolution), 1));
+  let hx = id.x < resolution.x / 2;
+  let hy = id.y < resolution.y / 2;
+  let ix = select(resolution.x - 1 - id.x, id.x, hx);
+  let iy = select(resolution.y - 1 - id.y, id.y, hy);
+  let w: f32 = 16;
+  let ox = ix % w < w / 2; let oy = iy % w < w / 2;
+  if(
+    (ox && (oy || (!oy && iy > ix))) ||
+    (oy && (ox || (!ox && ix > iy)))
+  ) {
+    textureStore(screen, uid.xy, vec4f(rendering(id.xy, resolution), 1));
+  }
 }`})
 
 const cpipe = await device.createComputePipelineAsync({

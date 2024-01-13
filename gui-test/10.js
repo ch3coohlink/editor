@@ -191,28 +191,15 @@ fn fbmperlin(ouv: vec2f, ofreq: f32, oamp: f32) -> f32 {
     freq *= 2; amp *= 0.5; uv = (uv + 2 + sin(uniforms.time * 0.0001));
   } return v;
 }
-fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
+fn height(id: vec2f, resolution: vec2f) -> f32 {
   var t = uniforms.time; var uv = (id.xy + 0.5
-     - resolution.xy * 0.5) / resolution.y; uv.y = -uv.y;
+    - resolution.xy * 0.5) / resolution.y; uv.y = -uv.y;
   uv *= 2;
   let d = pow((uv.x * uv.x + uv.y * uv.y), 1);
-  var p = fbmperlin(uv, 4, 1);
-  p = 0.5 * (p + 1);
-  // return vec3f(abs(p) + 0.2);
-  // return vec3f(1 - abs(p));
-  // return vec3f(p);
-  // return vec3f(0.5 * (p + 1));
-  
-  p = p - d; {
-    let d = p;
-    var col = select(vec3(0.9, 0.6, 0.3), vec3(0.6, 0.8, 1.0), d < 0);
-    col *= 1.0 - exp(-9.0*abs(d));
-    col *= 1.0 + 0.2*cos(128.0*abs(d));
-    col = mix( col, vec3(1.0), 1.0-smoothstep(0.0,0.015,abs(d)) );
-    return col;
-  }
-  
-  let v = p - d;
+  let p = fbmperlin(uv, 4, 1);
+  return 0.5 * (p + 1) - d;
+}
+fn coloring(v: f32) -> vec3f {
   let c0 = vec3(0.38, 0.65, 0.66);
   let c1 = vec3(0.84, 0.71, 0.62);
   let c2 = vec3(0.6, 0.68, 0.35);
@@ -221,26 +208,40 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   let c5 = vec3(0.43, 0.46, 0.53);
   let c6 = vec3(0.52, 0.55, 0.6);
   let c7 = vec3(0.82, 0.88, 0.87);
-  // if(v < 0.3) { return mix(c0, c1, smoothstep(0, 0.3, v)); }
-  // else if(v < 0.4) { return mix(c1, c2, smoothstep(0.3, 0.4, v)); }
-  // else if(v < 0.5) { return mix(c2, c3, smoothstep(0.4, 0.5, v)); }
-  // else if(v < 0.6) { return mix(c3, c4, smoothstep(0.5, 0.6, v)); }
-  // else if(v < 0.7) { return mix(c4, c5, smoothstep(0.6, 0.7, v)); }
-  // else if(v < 0.8) { return mix(c5, c6, smoothstep(0.7, 0.8, v)); }
-  // else if(v < 0.9) { return mix(c6, c7, smoothstep(0.8, 0.9, v)); }
-  if(v < 0.3) { return c0; }
-  else if(v < 0.4) { return c1; }
-  else if(v < 0.5) { return c2; }
-  else if(v < 0.6) { return c3; }
-  else if(v < 0.7) { return c4; }
-  else if(v < 0.8) { return c5; }
-  else if(v < 0.9) { return c6; }
+  if(v < 0.0) { return c0; }
+  else if(v < 0.1) { return c1; }
+  else if(v < 0.2) { return c2; }
+  else if(v < 0.3) { return c3; }
+  else if(v < 0.4) { return c4; }
+  else if(v < 0.5) { return c5; }
+  else if(v < 0.6) { return c6; }
   else { return c7; }
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
-  if (id.x >= resolution.x || id.y >= resolution.y) { return; }
-  textureStore(screen, uid.xy, vec4f(rendering(id.xy, resolution), 1));
+  let t = uniforms.time;
+  if id.x == 0 || id.y == 0 {
+    let rd = normalize(vec2f(1, 1));
+    // let rd = normalize(vec2f(sin(t), cos(t)));
+    var ro = id.xy;
+    let ad = abs(rd);
+    let step = select(ad.x, ad.y, ad.x < ad.y);
+    let d = rd / step;
+    var i = 0;
+    let c = vec3(randomvector(ro), randomvector(ro + 78975632.231332).x);
+    var ph = 0.0;
+    loop {
+      let h = height(ro, resolution);
+      ph -= 0.003;
+      let shadow = max(h, 0.0) <= ph;
+      if(!shadow) { ph = h; }
+      let c = coloring(h) * select(1, 0.5, shadow);
+      textureStore(screen, vec2u(ro), vec4f(c, 1));
+      ro += d;
+      i++;
+      if (all(ro >= resolution)) { break; }
+    }
+  }
 }`})
 
 const cpipe = await device.createComputePipelineAsync({
