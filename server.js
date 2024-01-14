@@ -8,7 +8,7 @@ const port = 9999
 
 const server = http.createServer((req, res) => {
   let u = new URL('https://localhost' + req.url)
-  let s = fs.createReadStream(path.join(basepath, u.pathname))
+  let s = fs.createReadStream(path.join(basepath, decodeURI(u.pathname)))
   s.on('error', () => (res.writeHead(404), res.end()))
   s.pipe(res)
 }).listen(port)
