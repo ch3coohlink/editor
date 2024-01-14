@@ -28,7 +28,7 @@
       `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
       `const require = __require(__dirname)\n` + `with($) {\n${src}\n}`)($)))
 
-    let load = async path => fetch(path).then(v => v.text())
+    let load = path => fetch(path).then(v => v.text())
 
     const sp = new URLSearchParams(location.search)
     const initpath = sp.get('load') ?? sp.get('init')
