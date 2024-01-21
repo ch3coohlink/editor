@@ -295,10 +295,9 @@ fn sdfcylinder (p: vec3f, h: f32, r: f32) -> f32 {
   return insideDistance + outsideDistance;
 }
 fn sdfbox (p: vec3f, s: vec3f) -> f32 {
-  let d = abs(p) - (s / 2.0);
-  let insideDistance = min(max(d.x, max(d.y, d.z)), 0.0);
-  let outsideDistance = length(max(d, vec3(0)));
-  return insideDistance + outsideDistance;
+  let d = abs(p) - s;
+  let mc = max(d.x, max(d.y, d.z));
+  return min(mc, length(max(d, vec3(0))));
 }
 fn sdfsphere (p: vec3f, r: f32) -> f32 {
   return length(p) - r;
@@ -339,6 +338,22 @@ fn map(p: vec3f) -> f32 {
 fn clrgradient(v: f32, a: vec3f, b: vec3f, c: vec3f, d: vec3f) -> vec3f {
   return a + b * cos( 6.28318*(c * v + d) );
 }
+const ma = mat3x3f(0.60, 0.00, 0.80, 0.00, 1.00, 0.00, -0.80, 0.00, 0.60 );
+fn modulo(x: vec3f, y: f32) -> vec3f { return x - y * floor(x / y); }
+fn mengersponge(p: vec3f) -> f32 {
+  var d = sdfbox(p, vec3(1));
+  var s = 1.0;
+  for(var m = 0; m < 5; m++) {
+    let a = modulo(p * s, 2.0) - 1.0; s *= 3.0;
+    let r = abs(1.0 - 3.0 * abs(a));
+    let da = max(r.x, r.y);
+    let db = max(r.y, r.z);
+    let dc = max(r.z, r.x);
+    let c = (min(da, min(db, dc)) - 1.0) / s;
+    if(c > d) { d = c; }
+  }
+  return d;
+}
 fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   var pw = 1 / resolution.y;
   var t = uniforms.time; var uv = (id.xy + 0.5
@@ -354,13 +369,12 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   let maxstep = 100.0; var i = 0.0;
   var depth = 0.0; let end = 100.0;
   for (; i < maxstep; i += 1) {
-    let dist = map(ro + depth * rd);
+    let dist = mengersponge(ro + depth * rd);
     if (dist < 0.00001) { break; }
     depth += dist;
     if (depth >= end) { break; }
   }
   return mix(vec3(0), vec3(1), i / maxstep);
-  // return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
   let id = vec3f(uid); let resolution = vec2f(textureDimensions(screen));
