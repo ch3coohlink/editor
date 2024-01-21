@@ -359,7 +359,7 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
     depth += dist;
     if (depth >= end) { break; }
   }
-  return mix(vec3(0, 1, 0), vec3(1, 0, 0), i / maxstep);
+  return mix(vec3(0), vec3(1), i / maxstep);
   // return vec3f(.11, .33, .99) + 0.8 * pow(clamp(1 - rd.y, 0, 1), 4.);
 }
 @compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) uid: vec3u) {
