@@ -36,6 +36,7 @@
 
     const sp = new URLSearchParams(location.search)
     const initpath = sp.get('load') ?? sp.get('init')
+    document.title = decodeURI(initpath)
     let ws, connect = () => {
       ws = new WebSocket((window.location.protocol === 'https:'
         ? 'wss:' : 'ws:') + '//' + window.location.host)
