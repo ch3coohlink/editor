@@ -447,14 +447,48 @@ window.addEventListener('keyup', e => {
   pressed.delete(e.key.toLowerCase())
 })
 
+const plotter = () => {
+  const div = document.createElement("div")
+  div.style.position = "fixed"
+  div.style.top = "0"
+  div.style.right = "0"
+  div.style.background = "#ffffff33"
+  div.style.width = "70px"
+  const text = document.createElement("span")
+  text.style.color = "white"
+  const cvs = document.createElement("canvas")
+  cvs.style.width = "100%"
+  cvs.style.height = "50px"
+  cvs.style.display = "block"
+  const ctx = cvs.getContext("2d")
+  div.append(text, cvs)
+  div.addfpsdata = fps => {
+    text.innerText = `FPS: ${fps.toFixed(1)}`
+    data.push(fps), data.shift()
+  }
+  const data = [...new Array(70)].map(() => 0)
+  cvs.width = 70, cvs.height = 50
+  div.drawgraph = () => {
+    ctx.clearRect(0, 0, 200, 200)
+    ctx.strokeStyle = "white"
+    ctx.beginPath(), ctx.moveTo(-100, 0)
+    for (let i = 0, s = data.length; i < s; i++) {
+      ctx.lineTo(i, 50 - data[i] / 60 * 50)
+    } ctx.stroke()
+  }
+  return div
+}
 
+const fpscounter = plotter()
+document.body.append(fpscounter)
 let st = performance.now() / 1000, pt = st
 const loop = t => {
   t /= 1000; let dt = t - pt; pt = t
-  // log(1 / dt)
+  fpscounter.addfpsdata(1 / dt)
+  fpscounter.drawgraph()
   dt = Math.min(dt, 1 / 60)
 
-  let spd = 10, movero = (rd, s = 1) => {
+  let spd = 0.1, movero = (rd, s = 1) => {
     // let spd = 0.001, movero = (rd, s = 1) => {
     ro[0] += rd[0] * spd * dt * s
     ro[1] += rd[1] * spd * dt * s
