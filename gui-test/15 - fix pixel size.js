@@ -372,10 +372,10 @@ fn rendering(id: vec2f, resolution: vec2f) -> vec3f {
   for (; i < maxstep; i += 1) {
     let dist = mengersponge(ro + depth * rd);
     if (dist < pw * depth) {
+      // do 6 more distance evaluation for
+      // calculate normal & anti-aliasing
       depth += dist;
-      // let lastdist = mengersponge(ro + depth * rd);
-      // i += 1;
-      // if(lastdist < dist) { depth += lastdist; }
+      i += 6;
       break;
     }
     // if (dist < 0.0001 || depth >= end) { break; }
