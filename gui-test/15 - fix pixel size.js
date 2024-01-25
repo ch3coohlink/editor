@@ -471,17 +471,18 @@ const plotter = () => {
   const ctx = cvs.getContext("2d")
   div.append(text, cvs)
   div.addfpsdata = fps => {
-    text.innerText = `FPS: ${fps.toFixed(1)}`
+    text.innerText = `${fps.toFixed(1)}`
     data.push(fps), data.shift()
   }
   const data = [...new Array(70)].map(() => 0)
   cvs.width = 70, cvs.height = 50
   div.drawgraph = () => {
+    let max = Math.max(...data)
     ctx.clearRect(0, 0, 200, 200)
     ctx.strokeStyle = "white"
     ctx.beginPath(), ctx.moveTo(-100, 0)
     for (let i = 0, s = data.length; i < s; i++) {
-      ctx.lineTo(i, 50 - data[i] / 60 * 50)
+      ctx.lineTo(i, 50 - data[i] / max * 50)
     } ctx.stroke()
   }
   return div

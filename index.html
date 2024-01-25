@@ -32,6 +32,7 @@
 
     const sp = new URLSearchParams(location.search)
     const initpath = sp.get('load') ?? sp.get('init')
+    document.title = decodeURI(initpath)
     load(initpath).then(v => exec(initpath, v))
   </script>
 </head>
