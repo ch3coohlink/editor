@@ -1,9 +1,9 @@
 let pc1 = new RTCPeerConnection(), pc2 = new RTCPeerConnection()
 
-let candidate = (pc, can) => can && pc.addIceCandidate(can)
+let c = (pc, can) => can && pc.addIceCandidate(can)
 
-pc1.onicecandidate = e => candidate(pc2, e.candidate)
-pc2.onicecandidate = e => candidate(pc1, e.candidate)
+pc1.onicecandidate = e => c(pc2, e.candidate)
+pc2.onicecandidate = e => c(pc1, e.candidate)
 
 pc1.oniceconnectionstatechange = e => log('pc1 iceConnState:', pc1.iceConnectionState)
 pc2.oniceconnectionstatechange = e => log('pc2 iceConnState:', pc2.iceConnectionState)
