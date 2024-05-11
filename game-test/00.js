@@ -43,4 +43,4 @@ event_functions.push(() => {
 
 })
 
-// maybe prepare a story script for this
+// maybe prepare a story script for this game
