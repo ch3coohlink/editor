@@ -79,12 +79,7 @@ $.create_editor = (parent) => {
   } return $
 }
 
-let d = document.createElement('div')
-d.style.width = d.style.height = '100%'
-document.body.append(d)
-
-let e = create_editor(d)
-e.value = `await require('../common/basic.js')
+const text = `await require('../common/basic.js')
 
 const { min, max, floor } = Math
 const objarr = (o, a = []) => {
@@ -128,5 +123,25 @@ const diff = (e, f, i = 0, j = 0) => {
 }
 
 diff('abc'.split(''), 'bcfffffffffffffffffffffff'.split(''))`
-e.change_language('javascript')
+
+{
+  let d = document.createElement('div')
+  d.style.height = '50%'
+  document.body.append(d)
+
+  let e = create_editor(d)
+  e.value = text
+  e.change_language('javascript')
 // e.change_language('typescript')
+}
+
+{
+  let d = document.createElement('div')
+  d.style.height = '50%'
+  document.body.append(d)
+
+  let e = create_editor(d)
+  e.value = text
+  e.change_language('javascript')
+// e.change_language('typescript')
+}
