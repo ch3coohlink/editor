@@ -24,14 +24,10 @@
     (clearTimeout(i), i = setTimeout(() => f(...a), t))
   $.throttle = (f, t = 100, i) => (...a) =>
     i ? 0 : (i = 1, f(...a), setTimeout(() => i = 0, t))
-  $.uuid = (d = 32) => [...crypto.getRandomValues(new Uint8Array(d))]
-    .map(v => v.toString(16).padStart(2, '0')).join("")
-  $.sha256 = async t => {
-    const msgBuffer = new TextEncoder().encode(t)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-  }
+  const hexenc = b => [...b].map(v => v.toString(16).padStart(2, '0')).join("")
+  $.uuid = (d = 32) => hexenc(crypto.getRandomValues(new Uint8Array(d)))
+  $.sha256 = async t => hexenc(new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t))))
   $.eventnode = ($ = {}) => {
     $._handles = {}; with ($) {
       $.emit = (t, ...a) => _handles[t]?.forEach(f => f(...a))
@@ -41,16 +37,14 @@
     } return $
   }
   const { floor } = Math
-  $.bsearch = (a, cmp, l = 0, r = a.length - 1, m) => {
+  $.bsearch = (a, cmp, l = 0, r = a.length - 1, m, c) => {
     while (l <= r) {
       m = floor((l + r) / 2), c = cmp(a[m])
       if (c > 0) { r = m - 1 } else if (c < 0) { l = m + 1 } else { return m }
     } return -1
-  }
-  $.bsleft = (a, c, l = 0, r = a.length, m) => {
+  }, $.bsleft = (a, c, l = 0, r = a.length, m) => {
     while (l < r) (m = floor((l + r) / 2), c(a[m]) < 0 ? l = m + 1 : r = m); return l
-  }
-  $.bsright = (a, c, l = 0, r = a.length, m) => {
+  }, $.bsright = (a, c, l = 0, r = a.length, m) => {
     while (l < r) (m = floor((l + r) / 2), c(a[m]) > 0 ? r = m : l = m + 1); return r - 1
   }
 } { // diff algorithm ---------------------------------------------------------
