@@ -292,7 +292,7 @@ $.texteditor = () => {
     css.innerText = `@import "${monaco_root}/editor/editor.main.css";`
     const div = document.createElement('div')
     div.className = 'monaco-editor-div'
-    div.style.width = div.style.height = '100%'
+    div.style.height = '100%'
     root.append(div, css)
 
     $.wordWrap = "on"
