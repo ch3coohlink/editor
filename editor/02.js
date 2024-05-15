@@ -9,8 +9,8 @@
       t = imul(a ^ a >>> 15, 1 | a),
       t = t + imul(t ^ t >>> 7, 61 | t) ^ t,
       (t ^ t >>> 14) >>> 0) / 4294967296
-  $.genrd = seed => {
-    let { log, cos, sqrt, ceil, PI } = Math, _rd = mb32(seed)
+  $.genrd = (seed, _rd = mb32(seed)) => {
+    let { log, cos, sqrt, ceil, PI } = Math
     let rd = (a = 1, b) => (b ? 0 : (b = a, a = 0), _rd() * (b - a) + a)
     let rdi = (a, b) => ceil(rd(a, b))
     let gaussian = (mean = 0, stdev = 1) => {
@@ -61,8 +61,8 @@ const graph = ($ = { g: {}, i: 0 }) => {
   } return $
 }
 
-const rd = (a = 1, b) => (b ? 0 : (b = a, a = 0), Math.random() * (b - a) + a)
 // const { rd } = genrd('今日もいい天気')
+const { rd, gaussian } = genrd(0, Math.random)
 const newpos = (n, d = n.data) => {
   d.pos = { x: rd(-1, 1) * 100, y: rd(-1, 1) * 100 }
   d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
@@ -101,8 +101,8 @@ const layout = g => {
     hooke(gravity, 1, ad, ap)
     ad.vec.x += ad.acc.x * time.delta
     ad.vec.y += ad.acc.y * time.delta
-    ad.vec.x = sign(ad.vec.x) * max(min(abs(ad.vec.x), 1000) - 100 * time.delta, 0)
-    ad.vec.y = sign(ad.vec.y) * max(min(abs(ad.vec.y), 1000) - 100 * time.delta, 0)
+    ad.vec.x = sign(ad.vec.x) * max(min(abs(ad.vec.x), 1000) - 200 * time.delta, 0)
+    ad.vec.y = sign(ad.vec.y) * max(min(abs(ad.vec.y), 1000) - 200 * time.delta, 0)
     ap.x += ad.vec.x * time.delta
     ap.y += ad.vec.y * time.delta
   }
@@ -118,13 +118,12 @@ const layout = g => {
   for (const n of ns) {
     const { x, y } = n.data.pos
     ctx.beginPath(), ctx.arc(x, y, 5 / s, 0, 2 * Math.PI), ctx.fill()
+    for (const k in n.to) {
+      const bp = n.to[k].data.pos
+      ctx.beginPath(), ctx.moveTo(x, y)
+      ctx.lineTo(bp.x, bp.y), ctx.stroke()
+    }
   }
-  for (const [a, b] of es) {
-    const ap = a.data.pos, bp = b.data.pos
-    ctx.beginPath(), ctx.moveTo(ap.x, ap.y)
-    ctx.lineTo(bp.x, bp.y), ctx.stroke()
-  }
-
   ctx.strokeStyle = 'red'
   for (const n of ns) {
     const { x, y } = n.data.pos, r = 0.1
@@ -157,17 +156,13 @@ const layout = g => {
 // }
 
 {
-  const { gaussian } = genrd(), { floor, abs } = Math
+  const { floor, abs } = Math
   const g = graph(), ids = [], l = 100
   for (let i = 0; i < l; i++) { ids.push(g.addnode()) }
   for (let i = 0; i < l; i++) {
-    let r = floor(abs(gaussian(0, 2)))
+    let r = floor(abs(gaussian(0, 2))) + rd() > 0.5 ? 1 : 0
     const a = ids[i], s = [...ids]
-    for (let j = 0; j < r && j < s.length; j++) {
-      let bi = floor(rd(s.length))
-      g.addedge(a, ids[bi])
-      s.splice(bi, 1)
-    }
-  }
-  $.loop = () => { layout(g) }
+    for (let j = 0; j < r && s.length > 0; j++)
+      g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
+  } $.loop = () => { layout(g) }
 }
