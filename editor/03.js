@@ -82,26 +82,31 @@ $.layout = ns => {
   }
   const gravity = newpos({ data: {} })
   gravity.data.pos.x = gravity.data.pos.y = 0
-  let total_accelaration = 0, lts = total_speed / ns.length; total_speed = 0
+  total_speed = 0, total_accelaration = 0
+  let tl = target_length, ts = target_speed
+  let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 10
   for (let i = 0, l = ns.length; i < l; i++) {
     const a = ns[i], ad = a.data, ap = ad.pos
-    const tl = target_length, ts = target_speed
-    const ep = -(tl ** 2) * ts, ed = 1 / tl * ts
     for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
     for (const k in a.to) { distance(a.to[k], ed, ad, ap) }
-    distance(gravity, 0.2 * ed, ad, ap)
+    distance(gravity, 0.1 * ed, ad, ap)
+    let lts = total_speed / ns.length
+    let lto = total_accelaration / ns.length
     total_accelaration += sqrt(ad.acc.x ** 2 + ad.acc.y ** 2)
     let vx = ad.vec.x + ad.acc.x * time.delta
     let vy = ad.vec.y + ad.acc.y * time.delta
     let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
-    total_speed += v = max(min(v, ts) - ts * friction * time.delta, 0)
+    ts = max(ts, lto) // dynamic speed limit
+    total_speed += v = max(min(v, ts) - ts * friction, 0)
     ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
     ap.x += vx * time.delta, ap.y += vy * time.delta
   } log('average speed', total_speed / ns.length,
     'average acc', total_accelaration / ns.length, target_speed)
 }
-// $.target_length = 300, $.target_speed = 10000, $.friction = 2.2 // very fast
-$.target_length = 300, $.target_speed = 1000, $.friction = 1.2 // slower, better quality
+$.target_length = 500,
+$.target_speed = 10000, $.friction = 0.2 // very fast
+// $.target_speed = 1000, $.friction = 0.15 // slower, better quality
+// $.target_speed = 200, $.friction = 0.11 // even slower
 $.draw = ns => {
   ctx.resetTransform()
   const w = cvs.width, h = cvs.height, s = 1 / 4
@@ -137,7 +142,7 @@ $.draw = ns => {
     ctx.lineTo(x + n.data.vec.x * r, y + n.data.vec.y * r), ctx.stroke()
   }
 }
-$.total_speed = 0, $.stop = false
+$.total_speed = 0, $.total_accelaration = 0, $.stop = false
 $.loop = () => {
   const ns = [], _g = g.g; for (const k in _g) {
     const n = _g[k]; if (!n.data) { n.data = {} } const d = n.data
@@ -146,7 +151,7 @@ $.loop = () => {
   if (total_speed === 0) { $.stop = true }
 }
 
-$.drawforce = false
+$.drawforce = true
 
 let seed
 seed = Math.floor(4294967296 * Math.random())
@@ -155,10 +160,14 @@ seed = Math.floor(4294967296 * Math.random())
 // seed = 1859179368
 // seed = 3287172346
 // seed = 1421229328
+// seed = 539063280 // 分离的搅局者
+// seed = 1553393304 // 悬臂
+// seed = 2978321351 // 杂耍机器
+// seed = 204395295 // 蛇形旋转
+seed = 444444812 // 刷子
 
 const a_run = () => {
   console.clear()
-  seed = Math.floor(4294967296 * Math.random())
   const { rd, rdi, gaussian } = genrd(seed); log('seed: ' + seed)
   $.rd = rd
   const gengraph = (l = 10) => {
@@ -173,6 +182,7 @@ const a_run = () => {
   }
   $.g = gengraph(Math.floor(Math.abs(gaussian() * 10) + 10))
   stop = false
+  seed = Math.floor(4294967296 * Math.random())
   // setTimeout(a_run, 60 / 185 * 1000 * rdi(0, 3))
 }; a_run()
 
