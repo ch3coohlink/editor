@@ -57,14 +57,15 @@ $.graph = ($ = { g: {}, i: 0 }) => {
     $.deledge = (a, b) => { delete g[a].to[b], delete g[b].from[a] }
   } return $
 }
+$.spawnrange = 800
 $.newpos = (n, d = n.data) => {
-  d.pos = { x: rd(-1, 1) * 100, y: rd(-1, 1) * 100 }
+  d.pos = { x: rd(-1, 1) * spawnrange, y: rd(-1, 1) * spawnrange }
   d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
   d.mat = 1, d.ecc = 1; return n
 }
 $.layout = ns => {
   const { sqrt, max, min, sign, abs } = Math
-  const electric = (b, p, ad, ap, m = 0.01) => {
+  const electric = (b, p, ad, ap, m = 1) => {
     const bd = b.data, bp = bd.pos
     const pdx = bp.x - ap.x, pdy = bp.y - ap.y
     const lsq = max(pdx * pdx + pdy * pdy, m), l = sqrt(lsq)
@@ -82,31 +83,33 @@ $.layout = ns => {
   }
   const gravity = newpos({ data: {} })
   gravity.data.pos.x = gravity.data.pos.y = 0
+  let lts = total_speed / ns.length
+  let lto = total_accelaration / ns.length
   total_speed = 0, total_accelaration = 0
   let tl = target_length, ts = target_speed
-  let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 10
+  let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
   for (let i = 0, l = ns.length; i < l; i++) {
     const a = ns[i], ad = a.data, ap = ad.pos
     for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
     for (const k in a.to) { distance(a.to[k], ed, ad, ap) }
-    distance(gravity, 0.1 * ed, ad, ap)
-    let lts = total_speed / ns.length
-    let lto = total_accelaration / ns.length
-    total_accelaration += sqrt(ad.acc.x ** 2 + ad.acc.y ** 2)
+    distance(gravity, 0.05 * ed, ad, ap)
+    let ac = sqrt(ad.acc.x ** 2 + ad.acc.y ** 2)
+    total_accelaration += ac
     let vx = ad.vec.x + ad.acc.x * time.delta
     let vy = ad.vec.y + ad.acc.y * time.delta
     let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
-    ts = max(ts, lto) // dynamic speed limit
+    // ts = max(ts, ac * 0.3) // dynamic speed limit
+    ts = max(ts, lto * 0.05) // dynamic speed limit
     total_speed += v = max(min(v, ts) - ts * friction, 0)
     ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
     ap.x += vx * time.delta, ap.y += vy * time.delta
-  } log('average speed', total_speed / ns.length,
-    'average acc', total_accelaration / ns.length, target_speed)
+  } //log('average speed', total_speed / ns.length,
+  //'average acc', total_accelaration / ns.length, target_speed)
 }
-$.target_length = 500,
-$.target_speed = 10000, $.friction = 0.2 // very fast
-// $.target_speed = 1000, $.friction = 0.15 // slower, better quality
-// $.target_speed = 200, $.friction = 0.11 // even slower
+$.target_length = 500
+// $.target_speed = 10000, $.friction = 0.5 // very fast
+$.target_speed = 1000, $.friction = 0.25 // slower, better quality
+// $.target_speed = 200, $.friction = 0.2 // even slower
 $.draw = ns => {
   ctx.resetTransform()
   const w = cvs.width, h = cvs.height, s = 1 / 4
@@ -148,10 +151,10 @@ $.loop = () => {
     const n = _g[k]; if (!n.data) { n.data = {} } const d = n.data
     if (!d.pos) { newpos(n) } ns.push(n)
   } if (!stop) { layout(ns) } draw(ns)
-  if (total_speed === 0) { $.stop = true }
+  if (total_speed === 0) { if (!stop) { log('end') } stop = true }
 }
 
-$.drawforce = true
+$.drawforce = false
 
 let seed
 seed = Math.floor(4294967296 * Math.random())
@@ -164,11 +167,27 @@ seed = Math.floor(4294967296 * Math.random())
 // seed = 1553393304 // 悬臂
 // seed = 2978321351 // 杂耍机器
 // seed = 204395295 // 蛇形旋转
-seed = 444444812 // 刷子
+// seed = 2247595570 // 蛇形旋转2
+// seed = 3038958380 // 超新星
+// seed = 444444812 // 刷子
+// seed = 1050134526 // 抓狂
+// seed = 206538447 // 蒸汽机
+// seed = 2309594599 // 鱼
+// seed = 2309594599 // 苍蝇
+// seed = 2309594599 // 超立方
+// seed = 1036672805 // 秋千
+// seed = 1039331300 // 螺旋
+// seed = 2401465745 // 远离
+seed = 3762559967 // 人造卫星
+// seed = 1328380658 // 离心机
+// seed = 4117029807 // 大摆锤
+// seed = 1538209205 // 五角星
 
+$.startseed = seed
 const a_run = () => {
   console.clear()
-  const { rd, rdi, gaussian } = genrd(seed); log('seed: ' + seed)
+  const { rd, rdi, gaussian } = genrd(seed)
+  log('startseed: ' + startseed, 'seed: ' + seed)
   $.rd = rd
   const gengraph = (l = 10) => {
     const g = graph(), { floor, abs } = Math, ids = []
@@ -180,9 +199,10 @@ const a_run = () => {
         g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
     } return g
   }
-  $.g = gengraph(Math.floor(Math.abs(gaussian() * 10) + 10))
+  let base = 10
+  $.g = gengraph(Math.floor(Math.abs(gaussian() * base) + rdi(base) + 5))
   stop = false
-  seed = Math.floor(4294967296 * Math.random())
+  seed = Math.floor(4294967296 * rd())
   // setTimeout(a_run, 60 / 185 * 1000 * rdi(0, 3))
 }; a_run()
 
