@@ -20,21 +20,8 @@
     } // Standard Normal variate using Box-Muller transform
     return { rd, rdi, gaussian }
   }
-} { // canvas
-  $.cvs = document.createElement('canvas')
-  cvs.style.imageRendering = 'pixelated'
-  document.body.append(cvs)
-  new ResizeObserver(() => {
-    const w = document.body.clientWidth, h = document.body.clientHeight
-    let r = window.devicePixelRatio, changed = false
-    const wr = Math.floor(w * r), hr = Math.floor(h * r)
-    if (cvs.width !== wr) { changed = true, cvs.width = wr }
-    if (cvs.height !== hr) { changed = true, cvs.height = hr }
-    cvs.style.width = (wr / r) + 'px'
-    cvs.style.height = (hr / r) + 'px'
-    if ($.createtexture && changed) { createtexture() }
-  }).observe(document.body)
-  $.ctx = cvs.getContext('2d')
+  $.dom = n => document.createElement(n)
+  $.svg = n => document.createElementNS('http://www.w3.org/2000/svg', n)
 } { // time & frame
   $.time = { current: 0, delta: 0, maxdelta: 1 / 60 }
   time.now = () => performance.now() / 1000
@@ -49,12 +36,19 @@
 // ----------------------------------------------------------------------------
 $.graph = ($ = { g: {}, i: 0 }) => {
   with ($) {
-    $.addnode = (id = i++) => (g[id] = { id, to: {}, from: {} }, id)
-    $.delnode = (id, n = g[id]) => {
-      for (const k in n.to) { delete g[k].from[id] } delete g[id]
-      for (const k in n.from) { delete g[k].to[id] }
-    }; $.addedge = (a, b) => { g[a].to[b] = g[b], g[b].from[a] = g[a] }
-    $.deledge = (a, b) => { delete g[a].to[b], delete g[b].from[a] }
+    $.addnode = (id = i++) => {
+      g[id] = { id, to: {}, from: {}, nto: 0, nfrom: 0 }
+      newnodeelm(g[id]); return id
+    }; $.delnode = (id, n = g[id]) => {
+      for (const k in n.to) { deledge(id, k) } delete g[id]
+      for (const k in n.from) { deledge(k, id) } n.elm.remove()
+    }; $.addedge = (a, b) => {
+      g[a].to[b] = { o: g[b] }, g[b].from[a] = g[a]
+      g[a].nto++, g[b].nfrom++, newedgeelm(g[a], g[b])
+    }; $.deledge = (a, b) => {
+      g[a].to[b].elm.remove(), g[a].nto--, g[b].nfrom--
+      delete g[a].to[b], delete g[b].from[a]
+    }
   } return $
 }
 $.spawnrange = 800
@@ -88,8 +82,7 @@ $.layout = ns => {
   for (let i = 0, l = ns.length; i < l; i++) {
     const a = ns[i], ad = a.data, ap = ad.pos
     for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
-    let to = 0; for (const k in a.to) { to++ }
-    for (const k in a.to) { distance(a.to[k], ed / to, ad, ap) }
+    for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
     distance(gravity, 0.05 * ed, ad, ap)
     let vx = ad.vec.x + ad.acc.x * time.delta
     let vy = ad.vec.y + ad.acc.y * time.delta
@@ -106,37 +99,27 @@ $.target_speed = 1000, $.friction = 0.05 // slower, better quality
 $.target_speed = 1000, $.friction = 0.01 // slower, better quality
 // $.target_speed = 200, $.friction = 0.01 // even slower
 $.draw = ns => {
-  ctx.resetTransform()
-  const w = cvs.width, h = cvs.height, s = 1 / 4
-  ctx.fillStyle = 'white'
-  ctx.fillRect(0, 0, w, h)
-  ctx.setTransform(s, 0, 0, -s, w * 0.5, h * 0.5)
-  ctx.fillStyle = ctx.strokeStyle = 'black'
-  ctx.lineWidth = 1 / s
-
+  const w = se.clientWidth, h = se.clientHeight
+  sep.setAttribute('transform', `translate(${w / 2}, ${h / 2}) scale(0.25)`)
+  sen.setAttribute('transform', `translate(${w / 2}, ${h / 2}) scale(0.25)`)
   for (const n of ns) {
-    const { x, y } = n.data.pos
-    ctx.beginPath(), ctx.arc(x, y, 5 / s, 0, 2 * Math.PI), ctx.fill()
+    const { x, y } = n.data.pos, e = n.elm
+    e.setAttribute('cx', x), e.setAttribute('cy', y)
     for (const k in n.to) {
-      const bp = n.to[k].data.pos
-      ctx.beginPath(), ctx.moveTo(x, y)
-      ctx.lineTo(bp.x, bp.y), ctx.stroke()
+      const b = n.to[k], bp = b.o.data.pos, e = b.elm
+      e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y}`)
     }
   }
   if (!drawforce) { return }
   ctx.strokeStyle = 'red'
   for (const n of ns) {
     const { x, y } = n.data.pos, r = .1
-    n.data.oldacc.x -= Math.sign(n.data.vec.x) * target_speed * friction
-    n.data.oldacc.y -= Math.sign(n.data.vec.y) * target_speed * friction
-    ctx.beginPath(), ctx.moveTo(x, y)
-    ctx.lineTo(x + n.data.oldacc.x * r, y + n.data.oldacc.y * r), ctx.stroke()
+    const ax = n.data.oldacc.x - Math.sign(n.data.vec.x) * target_speed * friction
+    const ay = n.data.oldacc.y - Math.sign(n.data.vec.y) * target_speed * friction
   }
   ctx.strokeStyle = 'green'
   for (const n of ns) {
     const { x, y } = n.data.pos, r = 1
-    ctx.beginPath(), ctx.moveTo(x, y)
-    ctx.lineTo(x + n.data.vec.x * r, y + n.data.vec.y * r), ctx.stroke()
   }
 }
 $.total_speed = 0, $.total_accelaration = 0, $.stop = false
@@ -148,28 +131,43 @@ $.loop = () => {
   if (total_speed === 0) { if (!stop) { log('end in: ' + layouttime.toFixed(3) + 's') } stop = true }
 }
 
-$.drawforce = false
+const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
+$.se = svg('svg'); document.body.append(se)
+se.style.display = 'block'
+se.style.height = '100%'
+se.style.width = '100%'
+$.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
+$.newnodeelm = n => {
+  const e = svg('circle')
+  e.setAttribute('r', (5 * 4) + 'px')
+  e.setAttribute('fill', 'black')
+  n.elm = e, sen.append(e)
+}
+$.newedgeelm = (a, b) => {
+  const e = svg('path')
+  e.setAttribute('stroke', 'black')
+  e.setAttribute('stroke-width', '2px')
+  a.to[b.id].elm = e, sep.append(e)
+}
 
-let seed
-seed = Math.floor(4294967296 * Math.random())
+const gengraph = (l = 10) => {
+  const g = graph(), { floor, abs } = Math, ids = []
+  for (let i = 0; i < l; i++) { ids.push(g.addnode()) }
+  for (let i = 0; i < l; i++) {
+    let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
+    const a = ids[i], s = [...ids]
+    for (let j = 0; j < r && s.length > 0; j++)
+      g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
+  } return g
+}
 
-$.startseed = seed
+let seed = Math.floor(4294967296 * Math.random())
+$.drawforce = false, $.startseed = seed
 const a_run = () => {
-  console.clear()
-  const { rd, rdi, gaussian } = genrd(seed)
-  log('startseed: ' + startseed, 'seed: ' + seed)
-  $.rd = rd
-  const gengraph = (l = 10) => {
-    const g = graph(), { floor, abs } = Math, ids = []
-    for (let i = 0; i < l; i++) { ids.push(g.addnode()) }
-    for (let i = 0; i < l; i++) {
-      let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
-      const a = ids[i], s = [...ids]
-      for (let j = 0; j < r && s.length > 0; j++)
-        g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
-    } return g
-  }
-  let base = 25
+  console.clear(); log('startseed: ' + startseed, 'seed: ' + seed)
+  const grd = genrd(seed), base = 25
+  sep.innerHTML = sen.innerHTML = ''
+  $.rd = grd.rd, $.gaussian = grd.gaussian, $.rdi = grd.rdi
   $.g = gengraph(Math.floor(Math.abs(gaussian() * base) + rdi(base) + 5))
   stop = false, $.layouttime = 0
   seed = Math.floor(4294967296 * rd())
