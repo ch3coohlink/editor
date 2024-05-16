@@ -40,7 +40,7 @@
   time.now = () => performance.now() / 1000
   const frame = t => {
     let pt = time.current, ct = time.current = t / 1000
-    time.delta = Math.min(ct - pt, time.maxdelta)
+    time.realdelta = Math.min(ct - pt, time.maxdelta)
     time.delta = time.maxdelta * 3
     requestAnimationFrame(frame); loop()
   }; requestAnimationFrame(frame)
@@ -81,11 +81,8 @@ $.layout = ns => {
     ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
     bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
   }
-  const gravity = newpos({ data: {} })
+  const gravity = newpos({ data: {} }); total_speed = 0
   gravity.data.pos.x = gravity.data.pos.y = 0
-  let lts = total_speed / ns.length
-  let lto = total_accelaration / ns.length
-  total_speed = 0, total_accelaration = 0
   let tl = target_length, ts = target_speed
   let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
   for (let i = 0, l = ns.length; i < l; i++) {
@@ -94,24 +91,20 @@ $.layout = ns => {
     let to = 0; for (const k in a.to) { to++ }
     for (const k in a.to) { distance(a.to[k], ed / to, ad, ap) }
     distance(gravity, 0.05 * ed, ad, ap)
-    let ac = sqrt(ad.acc.x ** 2 + ad.acc.y ** 2)
-    total_accelaration += ac
     let vx = ad.vec.x + ad.acc.x * time.delta
     let vy = ad.vec.y + ad.acc.y * time.delta
     let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
-    // ts = max(ts, ac * 0.3) // dynamic speed limit
-    ts = max(ts, lto * 0.05) // dynamic speed limit
     total_speed += v = max(min(v, ts) - ts * friction, 0)
     ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
     ap.x += vx * time.delta, ap.y += vy * time.delta
     ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
-  } //log('average speed', total_speed / ns.length,
-  //'average acc', total_accelaration / ns.length, target_speed)
+  }
 }
 $.target_length = 500
 $.target_speed = 2000, $.friction = 0.1 // very fast
+$.target_speed = 1000, $.friction = 0.05 // slower, better quality
 $.target_speed = 1000, $.friction = 0.01 // slower, better quality
-// $.target_speed = 200, $.friction = 0.2 // even slower
+// $.target_speed = 200, $.friction = 0.01 // even slower
 $.draw = ns => {
   ctx.resetTransform()
   const w = cvs.width, h = cvs.height, s = 1 / 4
@@ -151,33 +144,14 @@ $.loop = () => {
   const ns = [], _g = g.g; for (const k in _g) {
     const n = _g[k]; if (!n.data) { n.data = {} } const d = n.data
     if (!d.pos) { newpos(n) } ns.push(n)
-  } if (!stop) { layout(ns) } draw(ns)
-  if (total_speed === 0) { if (!stop) { log('end') } stop = true }
+  } if (!stop) { layout(ns); layouttime += time.realdelta } draw(ns)
+  if (total_speed === 0) { if (!stop) { log('end in: ' + layouttime.toFixed(3) + 's') } stop = true }
 }
 
 $.drawforce = false
 
 let seed
 seed = Math.floor(4294967296 * Math.random())
-// seed = 539063280 // 分离的搅局者
-// seed = 1553393304 // 悬臂
-// seed = 2978321351 // 杂耍机器
-// seed = 204395295 // 蛇形旋转
-// seed = 2247595570 // 蛇形旋转2
-// seed = 3038958380 // 超新星
-// seed = 444444812 // 刷子
-// seed = 1050134526 // 抓狂
-// seed = 206538447 // 蒸汽机
-// seed = 2309594599 // 鱼
-// seed = 2309594599 // 苍蝇
-// seed = 2309594599 // 超立方
-// seed = 1036672805 // 秋千
-// seed = 1039331300 // 螺旋
-// seed = 2401465745 // 远离
-seed = 3762559967 // 人造卫星
-// seed = 1328380658 // 离心机
-// seed = 4117029807 // 大摆锤
-// seed = 1538209205 // 五角星
 
 $.startseed = seed
 const a_run = () => {
@@ -195,9 +169,9 @@ const a_run = () => {
         g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
     } return g
   }
-  let base = 10
+  let base = 25
   $.g = gengraph(Math.floor(Math.abs(gaussian() * base) + rdi(base) + 5))
-  stop = false
+  stop = false, $.layouttime = 0
   seed = Math.floor(4294967296 * rd())
   // setTimeout(a_run, 60 / 185 * 1000 * rdi(0, 3))
 }; a_run()
