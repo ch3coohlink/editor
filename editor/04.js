@@ -31,6 +31,15 @@
     time.delta = time.maxdelta * 3
     requestAnimationFrame(frame); loop()
   }; requestAnimationFrame(frame)
+} { // global pointer event
+  let fs = [], mfs = new Set
+  let l = e => { for (const f of fs) { f(e) } fs = [] }
+  let m = e => { for (const f of mfs) { f(e) } }
+  $.listenpointerup = f => fs.push(f)
+  $.listenpointermove = f => mfs.add(f)
+  $.stoplistenmove = f => mfs.delete(f)
+  window.addEventListener('pointerup', l)
+  window.addEventListener('mousemove', m)
 }
 
 // ----------------------------------------------------------------------------
@@ -51,7 +60,7 @@ $.graph = ($ = { g: {}, i: 0 }) => {
     }
   } return $
 }
-$.spawnrange = 800
+$.spawnrange = 200
 $.newpos = (n, d = n.data) => {
   d.pos = { x: rd(-1, 1) * spawnrange, y: rd(-1, 1) * spawnrange }
   d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
@@ -93,21 +102,21 @@ $.layout = ns => {
     ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
   }
 }
-$.target_length = 500
-$.target_speed = 2000, $.friction = 0.1 // very fast
-$.target_speed = 1000, $.friction = 0.05 // slower, better quality
-$.target_speed = 1000, $.friction = 0.01 // slower, better quality
-// $.target_speed = 200, $.friction = 0.01 // even slower
+$.target_length = 125, $.target_speed = 250, $.friction = 0.01
 $.draw = ns => {
   const w = se.clientWidth, h = se.clientHeight
-  sep.setAttribute('transform', `translate(${w / 2}, ${h / 2}) scale(0.25)`)
-  sen.setAttribute('transform', `translate(${w / 2}, ${h / 2}) scale(0.25)`)
+  const x = w / 2 + camera.x, y = h / 2 + camera.y
+  const transtr = `translate(${sorigin.x}, ${sorigin.y}) scale(${camera.s}) translate(${x}, ${y})`
+  sep.setAttribute('transform', transtr)
+  sen.setAttribute('transform', transtr)
   for (const n of ns) {
     const { x, y } = n.data.pos, e = n.elm
     e.setAttribute('cx', x), e.setAttribute('cy', y)
+    e.setAttribute('r', (5 / camera.s) + 'px')
     for (const k in n.to) {
       const b = n.to[k], bp = b.o.data.pos, e = b.elm
       e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y}`)
+      e.setAttribute('stroke-width', 0.5 / camera.s + 'px')
     }
   }
   if (!drawforce) { return }
@@ -130,23 +139,56 @@ $.loop = () => {
   } if (!stop) { layout(ns); layouttime += time.realdelta } draw(ns)
   if (total_speed === 0) { if (!stop) { log('end in: ' + layouttime.toFixed(3) + 's') } stop = true }
 }
+$.camera = { x: 0, y: 0, s: 1 }
+$.sorigin = { x: 0, y: 0 } // scale origin
+$.screen2svgcoord = (x, y) => {
+  const { left, top } = se.getBoundingClientRect()
+  const w = se.clientWidth, h = se.clientHeight
+  // x = x - left, y = y - top
+  x = (x - left - sorigin.x) / camera.s - (camera.x + w / 2)
+  y = (y - top - sorigin.y) / camera.s - (camera.y + h / 2)
+  return { x, y }
+}
 
 const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
 $.se = svg('svg'); document.body.append(se)
+$.sedraging = false
+se.addEventListener('pointerdown', e => {
+  if (e.target !== se) { return } sedraging = true
+  const drag = { x: e.pageX, y: e.pageY }, m = e => {
+    // const x = e.pageX / camera.s, y = e.pageY / camera.s
+    // camera.x += x - drag.x, camera.y += y - drag.y
+    // drag.x = x, drag.y = y
+    const { x, y } = screen2svgcoord(e.pageX, e.pageY)
+    camera.x = x, camera.y = y
+  }; listenpointermove(m)
+  listenpointerup(() => (stoplistenmove(m), sedraging = false))
+})
+$.zoom = (e, f) => {
+  let x = e.pageX, y = e.pageY, s = camera.s * f
+  let oo = { ...sorigin }; camera.s = s
+  sorigin.x = x - (x - oo.x) * f
+  sorigin.y = y - (y - oo.y) * f
+}
+
+se.addEventListener('wheel', e => e.deltaY < 0 ? zoom(e, 1.1) : zoom(e, 0.9))
 se.style.display = 'block'
 se.style.height = '100%'
 se.style.width = '100%'
 $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
 $.newnodeelm = n => {
   const e = svg('circle')
-  e.setAttribute('r', (5 * 4) + 'px')
   e.setAttribute('fill', 'black')
+  e.addEventListener('pointerdown', e => {
+    listenpointerup(e => {
+      log(e.pointerType)
+    })
+  })
   n.elm = e, sen.append(e)
 }
 $.newedgeelm = (a, b) => {
   const e = svg('path')
   e.setAttribute('stroke', 'black')
-  e.setAttribute('stroke-width', '2px')
   a.to[b.id].elm = e, sep.append(e)
 }
 
