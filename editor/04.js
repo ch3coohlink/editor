@@ -98,6 +98,7 @@ $.layout = ns => {
     let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
     total_speed += v = max(min(v, ts) - ts * friction, 0)
     ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
+    if (ad.lock) { ad.vec.x = ad.vec.y = 0; continue }
     ap.x += vx * time.delta, ap.y += vy * time.delta
     ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
   }
@@ -112,11 +113,11 @@ $.draw = ns => {
   for (const n of ns) {
     const { x, y } = n.data.pos, e = n.elm
     e.setAttribute('cx', x), e.setAttribute('cy', y)
-    e.setAttribute('r', (5 / camera.s) + 'px')
+    // e.setAttribute('r', (circlesize / camera.s) + 'px')
     for (const k in n.to) {
       const b = n.to[k], bp = b.o.data.pos, e = b.elm
       e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y}`)
-      e.setAttribute('stroke-width', 0.5 / camera.s + 'px')
+      // e.setAttribute('stroke-width', linewidth / camera.s + 'px')
     }
   }
   if (!drawforce) { return }
@@ -151,7 +152,8 @@ $.screen2svgcoord = (c = camera) => (x, y) => {
 
 const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
 $.se = svg('svg'); document.body.append(se)
-$.sedraging = false
+se.style.display = 'block', se.style.height = se.style.width = '100%'
+$.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
 se.addEventListener('pointerdown', e => {
   if (e.target !== se) { return }
   const c = { ...camera }, s = screen2svgcoord(c)
@@ -161,31 +163,32 @@ se.addEventListener('pointerdown', e => {
   }; listenpointermove(m)
   listenpointerup(() => (stoplistenmove(m)))
 })
+se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0 ? zoom(e, r) : zoom(e, 1 / r))
 $.zoom = (e, f) => {
   let x = e.pageX, y = e.pageY; camera.s *= f
   sorigin.x = x - (x - sorigin.x) * f
   sorigin.y = y - (y - sorigin.y) * f
 }
-
-se.addEventListener('wheel', e => e.deltaY < 0 ? zoom(e, 1.1) : zoom(e, 0.9))
-se.style.display = 'block'
-se.style.height = '100%'
-se.style.width = '100%'
-$.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
+$.circlesize = 7, $.linewidth = 1
 $.newnodeelm = n => {
-  const e = svg('circle')
-  e.setAttribute('fill', 'black')
-  e.addEventListener('pointerdown', e => {
-    listenpointerup(e => {
-      log(e.pointerType)
-    })
+  const c = svg('circle')
+  c.setAttribute('fill', 'black')
+  c.setAttribute('r', circlesize + 'px')
+  c.addEventListener('pointerdown', e => {
+    if (e.target !== c) { return } const m = e => {
+      const { x, y } = screen2svgcoord()(e.pageX, e.pageY)
+      n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+      stop = false, layouttime = 0
+    }; listenpointermove(m)
+    listenpointerup(() => (delete n.data.lock, stoplistenmove(m)))
   })
-  n.elm = e, sen.append(e)
+  n.elm = c, sen.append(c)
 }
 $.newedgeelm = (a, b) => {
-  const e = svg('path')
-  e.setAttribute('stroke', 'black')
-  a.to[b.id].elm = e, sep.append(e)
+  const p = svg('path')
+  p.setAttribute('stroke', 'black')
+  p.setAttribute('stroke-width', linewidth + 'px')
+  a.to[b.id].elm = p, sep.append(p)
 }
 
 const gengraph = (l = 10) => {
