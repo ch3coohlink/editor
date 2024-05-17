@@ -1,4 +1,4 @@
-// 01.js - 
+// 01.js - utility collection (no executable)
 //# sourceURL=7bF10sAz0.js
 
 { // load monaco editor -------------------------------------------------------

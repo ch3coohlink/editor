@@ -20,6 +20,7 @@
     } // Standard Normal variate using Box-Muller transform
     return { rd, rdi, gaussian }
   }
+  let { max, min } = Math; $.clamp = (v, s, l) => max(min(v, l), s)
   $.dom = n => document.createElement(n)
   $.svg = n => document.createElementNS('http://www.w3.org/2000/svg', n)
 } { // time & frame
@@ -33,13 +34,18 @@
   }; requestAnimationFrame(frame)
 } { // global pointer event
   let fs = [], mfs = new Set
-  let l = e => { for (const f of fs) { f(e) } fs = [] }
+  let u = e => { for (const f of fs) { f(e) } fs = [] }
   let m = e => { for (const f of mfs) { f(e) } }
+  $.listenpointerdown = (e, f) => (
+    e.addEventListener('mousedown', f),
+    e.addEventListener('touchstart', f))
   $.listenpointerup = f => fs.push(f)
   $.listenpointermove = f => mfs.add(f)
   $.stoplistenmove = f => mfs.delete(f)
-  window.addEventListener('pointerup', l)
+  window.addEventListener('mouseup', u)
+  window.addEventListener('touchend', u)
   window.addEventListener('mousemove', m)
+  window.addEventListener('touchmove', m)
 }
 
 // ----------------------------------------------------------------------------
@@ -92,6 +98,7 @@ $.layout = ns => {
     const a = ns[i], ad = a.data, ap = ad.pos
     for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
     for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
+    if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
     distance(gravity, 0.05 * ed, ad, ap)
     let vx = ad.vec.x + ad.acc.x * time.delta
     let vy = ad.vec.y + ad.acc.y * time.delta
@@ -120,17 +127,6 @@ $.draw = ns => {
       // e.setAttribute('stroke-width', linewidth / camera.s + 'px')
     }
   }
-  if (!drawforce) { return }
-  ctx.strokeStyle = 'red'
-  for (const n of ns) {
-    const { x, y } = n.data.pos, r = .1
-    const ax = n.data.oldacc.x - Math.sign(n.data.vec.x) * target_speed * friction
-    const ay = n.data.oldacc.y - Math.sign(n.data.vec.y) * target_speed * friction
-  }
-  ctx.strokeStyle = 'green'
-  for (const n of ns) {
-    const { x, y } = n.data.pos, r = 1
-  }
 }
 $.total_speed = 0, $.total_accelaration = 0, $.stop = false
 $.loop = () => {
@@ -150,37 +146,53 @@ $.screen2svgcoord = (c = camera) => (x, y) => {
   return { x, y }
 }
 
-const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
+const sty = dom('style'); sty.innerHTML =
+  `svg circle:hover { fill: red; }` +
+  `svg { touch-action: none; }`
 $.se = svg('svg'); document.body.append(se)
 se.style.display = 'block', se.style.height = se.style.width = '100%'
 $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
-se.addEventListener('pointerdown', e => {
+listenpointerdown(se, e => {
   if (e.target !== se) { return }
   const c = { ...camera }, s = screen2svgcoord(c)
-  const o = s(e.pageX, e.pageY), m = e => {
-    const { x, y } = s(e.pageX, e.pageY)
+  const o = s(...geteventlocation(e)), m = e => {
+    if (e.touches && e.touches.length > 2) { return a_run() }
+    if (e.touches && e.touches.length === 2) { return pinch(e) }
+    const { x, y } = s(...geteventlocation(e))
     camera.x = c.x + x - o.x, camera.y = c.y + y - o.y
-  }; listenpointermove(m)
-  listenpointerup(() => (stoplistenmove(m)))
+  }; listenpointermove(m), listenpointerup(() => (
+    ipd = false, stoplistenmove(m)))
 })
-se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0 ? zoom(e, r) : zoom(e, 1 / r))
-$.zoom = (e, f) => {
-  let x = e.pageX, y = e.pageY; camera.s *= f
-  sorigin.x = x - (x - sorigin.x) * f
-  sorigin.y = y - (y - sorigin.y) * f
+$.ipd = false // inital pinch distance
+$.pinch = e => {
+  let a = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  let b = { x: e.touches[1].clientX, y: e.touches[1].clientY }
+  let d = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2)
+  if (ipd === false) { ipd = d }
+  if (d === ipd) { return } const r = d / ipd; ipd = d
+  zoom([(a.x + b.x) / 2, (a.y + b.y) / 2], r)
 }
+se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
+  ? zoom(geteventlocation(e), r) : zoom(geteventlocation(e), 1 / r))
+$.zoom = ([x, y], f, s) => (s = camera.s,
+  camera.s = s * f, f = camera.s / s,
+  sorigin.x = x - (x - sorigin.x) * f,
+  sorigin.y = y - (y - sorigin.y) * f)
 $.circlesize = 7, $.linewidth = 1
 $.newnodeelm = n => {
   const c = svg('circle')
   c.setAttribute('fill', 'black')
   c.setAttribute('r', circlesize + 'px')
-  c.addEventListener('pointerdown', e => {
+  listenpointerdown(c, e => {
     if (e.target !== c) { return } const m = e => {
-      const { x, y } = screen2svgcoord()(e.pageX, e.pageY)
+      if (e.touches && e.touches.length !== 1) { return }
+      c.setAttribute('fill', 'red')
+      const { x, y } = screen2svgcoord()(...geteventlocation(e))
       n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
       stop = false, layouttime = 0
-    }; listenpointermove(m)
-    listenpointerup(() => (delete n.data.lock, stoplistenmove(m)))
+    }; listenpointermove(m), listenpointerup(() => (
+      c.setAttribute('fill', 'black'),
+      delete n.data.lock, stoplistenmove(m)))
   })
   n.elm = c, sen.append(c)
 }
@@ -189,6 +201,11 @@ $.newedgeelm = (a, b) => {
   p.setAttribute('stroke', 'black')
   p.setAttribute('stroke-width', linewidth + 'px')
   a.to[b.id].elm = p, sep.append(p)
+}
+$.geteventlocation = e => {
+  if (e.touches && e.touches.length == 1) {
+    return [e.touches[0].pageX, e.touches[0].pageY]
+  } else { return [e.pageX, e.pageY] }
 }
 
 const gengraph = (l = 10) => {
