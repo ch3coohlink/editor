@@ -141,12 +141,11 @@ $.loop = () => {
 }
 $.camera = { x: 0, y: 0, s: 1 }
 $.sorigin = { x: 0, y: 0 } // scale origin
-$.screen2svgcoord = (x, y) => {
+$.screen2svgcoord = (c = camera) => (x, y) => {
   const { left, top } = se.getBoundingClientRect()
   const w = se.clientWidth, h = se.clientHeight
-  // x = x - left, y = y - top
-  x = (x - left - sorigin.x) / camera.s - (camera.x + w / 2)
-  y = (y - top - sorigin.y) / camera.s - (camera.y + h / 2)
+  x = (x - left - sorigin.x) / camera.s - (c.x + w / 2)
+  y = (y - top - sorigin.y) / camera.s - (c.y + h / 2)
   return { x, y }
 }
 
@@ -154,21 +153,18 @@ const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
 $.se = svg('svg'); document.body.append(se)
 $.sedraging = false
 se.addEventListener('pointerdown', e => {
-  if (e.target !== se) { return } sedraging = true
-  const drag = { x: e.pageX, y: e.pageY }, m = e => {
-    // const x = e.pageX / camera.s, y = e.pageY / camera.s
-    // camera.x += x - drag.x, camera.y += y - drag.y
-    // drag.x = x, drag.y = y
-    const { x, y } = screen2svgcoord(e.pageX, e.pageY)
-    camera.x = x, camera.y = y
+  if (e.target !== se) { return }
+  const c = { ...camera }, s = screen2svgcoord(c)
+  const o = s(e.pageX, e.pageY), m = e => {
+    const { x, y } = s(e.pageX, e.pageY)
+    camera.x = c.x + x - o.x, camera.y = c.y + y - o.y
   }; listenpointermove(m)
-  listenpointerup(() => (stoplistenmove(m), sedraging = false))
+  listenpointerup(() => (stoplistenmove(m)))
 })
 $.zoom = (e, f) => {
-  let x = e.pageX, y = e.pageY, s = camera.s * f
-  let oo = { ...sorigin }; camera.s = s
-  sorigin.x = x - (x - oo.x) * f
-  sorigin.y = y - (y - oo.y) * f
+  let x = e.pageX, y = e.pageY; camera.s *= f
+  sorigin.x = x - (x - sorigin.x) * f
+  sorigin.y = y - (y - sorigin.y) * f
 }
 
 se.addEventListener('wheel', e => e.deltaY < 0 ? zoom(e, 1.1) : zoom(e, 0.9))
