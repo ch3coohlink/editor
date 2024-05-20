@@ -1,4 +1,4 @@
-// 05.js - multiple graph
+// 06.js - git editor
 //# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
@@ -110,7 +110,7 @@
     a => t => (a = a + 1831565813 | 0, t = imul(a ^ a >>> 15, 1 | a),
       t = t + imul(t ^ t >>> 7, 61 | t) ^ t, (t ^ t >>> 14) >>> 0) / 4294967296
   $.gseed = $.startseed = floor(4294967296 * random())
-  $.nextseed = (o = genrd(gseed = floor(4294967296 * mb32(gseed)()))) => (
+  $.nextseed = (s = floor(4294967296 * mb32(gseed)()), o = genrd(gseed = s)) => (
     $.rd = o.rd, $.gaussian = o.gaussian, $.rdi = o.rdi)
   $.genrd = (seed, _rd = mb32(seed)) => {
     let rd = (a = 1, b) => (b ? 0 : (b = a, a = 0), _rd() * (b - a) + a)
@@ -121,7 +121,7 @@
       return z * stdev + mean
     } // Standard Normal variate using Box-Muller transform
     return { rd, rdi, gaussian }
-  }; nextseed(genrd(gseed))
+  }; nextseed(0, genrd(gseed))
 }
 
 $.indexeddb = (name = "default", store = "default") => {
@@ -196,8 +196,8 @@ $.fakeidb = (name = "default", store = "default") => {
   } return $
 }
 
-$.git = (db) => {
-  let $ = { db }; with ($) {
+$.git = ($ = {}) => {
+  with ($) {
     let fstr = (n, f) => `git/files/${n}/` + (f ?? "")
 
     $.version_lock = true
@@ -397,8 +397,8 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
       d.mat = 1, d.ecc = 1; return n
     }
+    const { sqrt, max, min, sign, abs } = Math
     $.layout = ns => {
-      const { sqrt, max, min, sign, abs } = Math
       const electric = (b, p, ad, ap, m = 1) => {
         const bd = b.data, bp = bd.pos
         const pdx = bp.x - ap.x, pdy = bp.y - ap.y
@@ -440,15 +440,28 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       const x = w / 2 + camera.x, y = h / 2 + camera.y
       const transtr = `translate(${sorigin.x}, ${sorigin.y}) scale(${camera.s}) translate(${x}, ${y})`
       sep.setAttribute('transform', transtr)
+      sep.setAttribute('fill', 'none')
+      sep.setAttribute('stroke', 'black')
+      sep.setAttribute('stroke-width', linewidth + 'px')
+      sep.setAttribute('stroke-linecap', 'round')
       sen.setAttribute('transform', transtr)
-      for (const n of ns) {
+      if (stop) { return } for (const n of ns) {
         const { x, y } = n.data.pos, e = n.elm
         e.setAttribute('cx', x), e.setAttribute('cy', y)
-        // e.setAttribute('r', (circlesize / camera.s) + 'px')
         for (const k in n.to) {
-          const b = n.to[k], bp = b.o.data.pos, e = b.elm
-          e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y}`)
-          // e.setAttribute('stroke-width', linewidth / camera.s + 'px')
+          const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = 2
+          if (b.o === n) {
+            const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
+            e.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
+              `a ${r},${r} 0 1,0 ${-r2}, 0 a ${r},${r} 0 1,0 ${r2}, 0 ` +
+              `M ${x + r2 + c} ${y + c} L ${x + r2} ${y} L ${x + r2 - c} ${y + c}`)
+          } else {
+            let dx = bp.x - x, dy = bp.y - y, s = 0.6, c = arws
+            let mx = x + dx * s, my = y + dy * s
+            let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
+            e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+              `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+          }
         }
       }
     }
@@ -505,7 +518,6 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
     $.circlesize = 7, $.linewidth = 1
     $.newnodeelm = n => {
       const c = svg('circle')
-      c.setAttribute('fill', 'black')
       c.setAttribute('r', circlesize + 'px')
       listenpointerdown(c, e => {
         if (e.target !== c) { return } const m = e => {
@@ -514,15 +526,13 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
           const { x, y } = screen2svgcoord()(...geteventlocation(e))
           n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
         }; listenpointermove(m), listenpointerup(() => (
-          c.setAttribute('fill', 'black'),
+          c.removeAttribute('fill'),
           delete n.data.lock, cancelpointermove(m)))
       })
       n.elm = c, sen.append(c)
     }
     $.newedgeelm = (a, b) => {
       const p = svg('path')
-      p.setAttribute('stroke', 'black')
-      p.setAttribute('stroke-width', linewidth + 'px')
       a.to[b.id].elm = p, sep.append(p)
     }
     $.geteventlocation = (e, ef = e.touches) => {
@@ -541,24 +551,19 @@ $.gengraph = (l = 10, g = graph()) => {
     const a = ids[i], s = [...ids]
     for (let j = 0; j < r && s.length > 0; j++)
       g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
-  } return g
+  } g.reset(); return g
 }
 
-document.body.style.display = 'flex'
-document.body.style.flexFlow = 'column'
+$.giteditor = ($ = { gt: git(), g: graph() }) => {
+  with ($) {
+    $.newver = () => { }
+    $.frame = () => { g.frame() }
+    Object.defineProperty($, 'elm', { get: () => g.se })
+  } return $
+}
 {
-  let g = gengraph(10)
-  g.on('3finger', () => reset())
-  document.body.append(g.se)
-  listenframe(() => { if (g) { g.frame() } })
+  let ge = giteditor()
+  gengraph(25, ge.g)
+  document.body.append(ge.elm)
+  listenframe(() => { ge.frame() })
 }
-
-listenframe(() => { if (g) { g.frame() } })
-const reset = () => {
-  // if ($.g) { g.clear(), g.reset() } else { $.g = graph(), document.body.append(g.se) }
-  if ($.g) { g.reset() } else { $.g = graph(), document.body.append(g.se) }
-  const b = 25, l = Math.floor(Math.abs(gaussian() * b) + rdi(b) + 5)
-  gengraph(l, g), nextseed()
-  console.clear(); log('startseed: ' + startseed, 'seed: ' + gseed)
-}; reset()
-window.onkeydown = reset

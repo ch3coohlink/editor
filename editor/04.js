@@ -185,7 +185,7 @@ $.newnodeelm = n => {
   c.setAttribute('r', circlesize + 'px')
   listenpointerdown(c, e => {
     if (e.target !== c) { return } const m = e => {
-      if (e.touches && e.touches.length !== 1) { return }
+      if (e.touches && e.touches.length > 1) { return }
       c.setAttribute('fill', 'red')
       const { x, y } = screen2svgcoord()(...geteventlocation(e))
       n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
@@ -202,11 +202,8 @@ $.newedgeelm = (a, b) => {
   p.setAttribute('stroke-width', linewidth + 'px')
   a.to[b.id].elm = p, sep.append(p)
 }
-$.geteventlocation = e => {
-  if (e.touches && e.touches.length == 1) {
-    return [e.touches[0].pageX, e.touches[0].pageY]
-  } else { return [e.pageX, e.pageY] }
-}
+$.geteventlocation = e => e.touches && e.touches.length == 1 ?
+  [e.touches[0].pageX, e.touches[0].pageY] : [e.pageX, e.pageY]
 
 const gengraph = (l = 10) => {
   const g = graph(), { floor, abs } = Math, ids = []
