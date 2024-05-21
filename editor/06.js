@@ -9,7 +9,8 @@
   $.throttle = (f, t = 100, i) => (...a) =>
     i ? 0 : (i = 1, f(...a), setTimeout(() => i = 0, t))
   let hexenc = b => [...b].map(v => v.toString(16).padStart(2, '0')).join("")
-  $.uuid = (d = 32) => hexenc(crypto.getRandomValues(new Uint8Array(d)))
+  $.uuid_length = 32, $.uuid = (d = uuid_length) =>
+    hexenc(crypto.getRandomValues(new Uint8Array(d)))
   $.sha256 = async t => hexenc(new Uint8Array(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t))))
   let { max, min } = Math; $.clamp = (v, s, l) => max(min(v, l), s)
@@ -127,37 +128,22 @@
 $.indexeddb = (name = "default", store = "default") => {
   let $ = { name, store }; with ($) {
     $.dbp = new Promise((r, j, d = indexedDB.open(name)) => (
-      d.onsuccess = () => r(d.result),
-      d.onerror = () => j(d.error),
+      d.onsuccess = () => r(d.result), d.onerror = () => j(d.error),
       d.onupgradeneeded = () => d.result.createObjectStore(store)))
-
     $.deletedatabase = () => dbp.then(db => (db.close(),
       new Promise((r, j, d = indexedDB.deleteDatabase(name)) =>
         (d.onerror = j, d.onsuccess = r))))
-
     $.upgrade = f => dbp.then(db => (db.close(), $.dbp = new Promise(
       (r, j, d = indexedDB.open(name, db.version + 1)) => (
-        d.onsuccess = () => r(d.result),
-        d.onerror = () => j(d.error),
+        d.onsuccess = () => r(d.result), d.onerror = () => j(d.error),
         d.onupgradeneeded = () => f(d.result)))))
-
-    $.action = (type, cb, s = store) => dbp.then(db => new Promise(
-      (r, j, t = db.transaction(s ?? db.objectStoreNames, type)) => (
-        t.oncomplete = () => r(),
-        t.onabort = t.onerror = () => j(t.error),
-        cb(t))))
-
-    $.request = rq => new Promise((r, j) => (
-      rq.onsuccess = r(rq.result), rq.onerror = j))
-
-    $.ro = f => action("readonly", t => f(t.objectStore(store)))
-    $.rw = f => action("readwrite", t => f(t.objectStore(store)))
-
+    $.action = (cb, type = 'readwrite', s = store) => dbp.then(db => new Promise(
+      (r, j, t = db.transaction(s, type)) => (t.oncomplete = r, t.onabort =
+        t.onerror = () => j(t.error), cb(t => t.objectStore(store)))))
+    $.ro = f => action(f, "readonly"), $.rw = f => action(f)
     $.get = (k, r) => ro(s => r = s.get(k)).then(() => r.result)
     $.set = (k, v) => rw(s => s.put(v, k))
-    $.del = k => rw(s => s.delete(k))
-    $.clr = () => rw(s => s.clear())
-
+    $.del = k => rw(s => s.delete(k)), $.clr = () => rw(s => s.clear())
     $.key = r => ro(s => r = s.getAllKeys()).then(() => r.result)
     $.val = r => ro(s => r = s.getAll()).then(() => r.result)
     $.search = (kr, r = []) => ro(s =>
@@ -187,7 +173,7 @@ $.indexeddb = (name = "default", store = "default") => {
 
 $.fakeidb = (name = "default", store = "default") => {
   let $ = { name, store }; with ($) {
-    let o = {}, cmp = t => v => v.startsWith(t) ? 0 : v.localeCompare(t)
+    $.o = {}, cmp = t => v => v.startsWith(t) ? 0 : v.localeCompare(t)
     $.get = k => o[k], $.set = (k, v) => o[k] = v
     $.del = k => delete o[k], $.clr = () => o = {}
     $.key = () => Object.keys(o), $.val = () => Object.values(o)
@@ -251,29 +237,25 @@ $.git = ($ = {}) => {
     }
 
     $.newgraph = name => (graphs[name] = {}, roots[name] = newnode(name))
-    $.newnode = prev => {
-      let name, id = uuid(); if (!nodes[prev]) {
-        if (graphs[prev]) { name = prev, prev = null }
-        else { panic(`previous node: "${prev}" not exist`) }
-      } else { name = nodes[prev].graph }
-      const n = { to: {}, from: {}, files: {}, graph: name, time: new Date }
-      graphs[name][id] = nodes[id] = n; if (prev) {
-        n.files = deepcopy(nodes[prev].files)
-        n.from[prev] = nodes[prev].to[id] = 1
-      } return id
+    $.newrepo = async name => {
+      if (await db.get(`git/name_repo/${name}`)) { panic(`repo "${name}" already exists`) }
+      let id = uuid(), rpid = uuid(); await Promise.all([
+        db.set(`git/repo_name/${rpid}`, name),
+        db.set(`git/name_repo/${name}`, rpid),
+        db.set(`git/nodes/${id}`, rpid),
+        db.set(`git/repo_node/${rpid}/${id}`, true),
+        db.set(`git/repo_root/${rpid}`, id),
+      ]); return rpid
     }
-    $.newrepo = async (name) => {
-      if (await db.get(`git/name_repo/${name}`)) {
-        panic(`repo "${name}" already exists`)
-      }
-      let id = uuid(), repo = uuid()
+    $.renamerepo = async (oldn, name) => {
+      if (await db.get(`git/name_repo/${name}`)) { panic(`repo "${name}" already exists`) }
+      let id = await db.get(`git/name_repo/${oldn}`)
+      if (typeof id !== 'string') { panic(`repo "${oldn}" not exists`) }
       await Promise.all([
-        db.set(`git/repo_name/${repo}`, name),
-        db.set(`git/name_repo/${name}`, repo),
-        db.set(`git/nodes/${id}`, repo),
-        db.set(`git/repo_node/${repo}/${id}`, true),
-      ])
-      return id
+        db.set(`git/repo_name/${id}`, name),
+        db.set(`git/name_repo/${name}`, id),
+        db.del(`git/name_repo/${oldn}`),
+      ]); return id
     }
     $.newnode = async (prev) => {
       let repo = await db.get(`git/nodes/${prev}`)
@@ -312,8 +294,12 @@ $.git = ($ = {}) => {
       if (!id) { panic(`repo "${name}" not exist`) }
       return id
     }
-    $.write_node_description = async node => { }
-    $.read_node_description = async node => { }
+    $.write_node_description = async (node, desp) => {
+
+    }
+    $.read_node_description = async node => {
+
+    }
     $.readrepos = () => db.getpath("git/name_repo/")
     $.readnodes = async repo => {
       const a = await db.getpath(`git/repo_node/${repo}`)
@@ -383,8 +369,9 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       for (const k in n.to) { deledge(id, k) } delete g[id]
       for (const k in n.from) { deledge(k, id) } n.elm.remove()
     }
-    $.addedge = (a, b) => {
-      g[a].to[b] = { o: g[b] }, g[b].from[a] = g[a]
+    $.addedge = (a, b, n) => {
+      const o = { o: g[b] }; if (n) { o.name = n }
+      g[a].to[b] = o, g[b].from[a] = g[a]
       g[a].nto++, g[b].nfrom++, newedgeelm(g[a], g[b])
     }
     $.deledge = (a, b) => {
@@ -447,19 +434,22 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       sen.setAttribute('transform', transtr)
       if (stop) { return } for (const n of ns) {
         const { x, y } = n.data.pos, e = n.elm
-        e.setAttribute('cx', x), e.setAttribute('cy', y)
+        e.setAttribute('transform', `translate(${x}, ${y})`)
         for (const k in n.to) {
           const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = 2
           if (b.o === n) {
             const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
-            e.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
+            e.path.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
               `a ${r},${r} 0 1,0 ${-r2}, 0 a ${r},${r} 0 1,0 ${r2}, 0 ` +
               `M ${x + r2 + c} ${y + c} L ${x + r2} ${y} L ${x + r2 - c} ${y + c}`)
+            e.text.setAttribute('transform', `translate(${x + r2} ${y})`)
           } else {
             let dx = bp.x - x, dy = bp.y - y, s = 0.6, c = arws
-            let mx = x + dx * s, my = y + dy * s
+            let mx = x + dx * 0.5, my = y + dy * 0.5
+            mx = x + dx * s, my = y + dy * s
+            e.text.setAttribute('transform', `translate(${mx}, ${my})`)
             let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
-            e.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+            e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
               `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
           }
         }
@@ -487,8 +477,10 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       return { x, y }
     }
     const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
-    $.se = svg('svg'); se.style.touchAction = 'none'
-    se.style.display = 'block', se.style.height = se.style.width = '100%'
+    // + `svg text { fill: white; stoke: black; stroke-width: 0.2px; font-size: 10px; }`
+    $.se = svg('svg'); se.style.display = 'block'
+    se.style.userSelect = se.style.touchAction = 'none'
+    se.style.height = se.style.width = '100%'
     $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
     listenpointerdown(se, e => {
       if (e.target !== se) { return }
@@ -517,8 +509,16 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       sorigin.y = y - (y - sorigin.y) * f)
     $.circlesize = 7, $.linewidth = 1
     $.newnodeelm = n => {
-      const c = svg('circle')
+      const g = svg('g'), c = svg('circle'), t = svg('text')
+      t.textContent = n.id
+      g.append(c, t), sen.append(g)
       c.setAttribute('r', circlesize + 'px')
+      t.setAttribute('fill', 'white')
+      t.setAttribute('stroke', 'black')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      t.setAttribute('transform',
+        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)
       listenpointerdown(c, e => {
         if (e.target !== c) { return } const m = e => {
           if (e.touches && e.touches.length > 1) { return }
@@ -528,12 +528,18 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
         }; listenpointermove(m), listenpointerup(() => (
           c.removeAttribute('fill'),
           delete n.data.lock, cancelpointermove(m)))
-      })
-      n.elm = c, sen.append(c)
+      }); n.elm = g
     }
     $.newedgeelm = (a, b) => {
-      const p = svg('path')
-      a.to[b.id].elm = p, sep.append(p)
+      const g = svg('g'), p = svg('path'), t = svg('text')
+      const c = a.to[b.id], n = c.name
+      t.setAttribute('fill', 'black')
+      t.setAttribute('stroke', 'white')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      g.append(p, t); g.path = p; g.text = t
+      if (n) { t.textContent = n }
+      c.elm = g, sep.append(g)
     }
     $.geteventlocation = (e, ef = e.touches) => {
       const { left: l, top: t } = se.getBoundingClientRect()
@@ -554,16 +560,122 @@ $.gengraph = (l = 10, g = graph()) => {
   } g.reset(); return g
 }
 
-$.giteditor = ($ = { gt: git(), g: graph() }) => {
+$.graphdb = ($ = eventnode({})) => {
   with ($) {
-    $.newver = () => { }
+    $.current_graph = 'default'
+    $.addnode = async (id = uuid(), g = current_graph) => {
+      await Promise.all([idb.set(`$graph/${g}/${id}`, true),
+      idb.set(`$graph/${g}/numberto/${id}`, 0),
+      idb.set(`$graph/${g}/numberfrom/${id}`, 0),
+      ]); return id
+    }
+    $.delnode = async (id, g = current_graph) => {
+      const [to, from, keys] = await Promise.all([
+        idb.getpath(`$graph/${g}/to/${id}`),
+        idb.getpath(`$graph/${g}/from/${id}`),
+        idb.getpath(`$graph/${g}/${id}/`)
+      ]), p = [idb.del(`$graph/${g}/${id}`, true),
+      idb.del(`$graph/${g}/numberto/${id}`),
+      idb.del(`$graph/${g}/numberfrom/${id}`),
+      ...to.map(([k]) => idb.del(`$graph/${g}/${id}/` + k)),
+      ...from.map(([k]) => idb.del(`$graph/${g}/to/${id}` + k)),
+      ...keys.map(([k]) => idb.del(`$graph/${g}/from/${id}` + k)),
+      ...to.map(k => deledge(id, k)),
+      ...from.map(k => deledge(k, id)),
+      ]; await Promise.all(p)
+    }
+    $.addedge = async (a, b, n, g = current_graph) => {
+      const p = [], [c, nto, nfr] = await Promise.all([
+        idb.get(`$graph/${g}/to/${a}/${b}`),
+        idb.get(`$graph/${g}/numberto/${a}`),
+        idb.get(`$graph/${g}/numberfrom/${b}`)])
+      if (c) { throw Error(`edge exist: ${a} -> ${b}`) }
+      if (typeof nto !== 'number') { throw Error(`node: ${a} not exist`) }
+      if (typeof nfr !== 'number') { throw Error(`node: ${b} not exist`) }
+      if (n) p.push(idb.set(`$graph/${g}/${a}/${n}`, b),
+        idb.set(`$graph/${g}/to/${a}/${b}/name`, n))
+      p.push(idb.set(`$graph/${g}/to/${a}/${b}`, true),
+        idb.set(`$graph/${g}/from/${b}/${a}`, true),
+        idb.set(`$graph/${g}/numberto/${a}`, nto + 1),
+        idb.set(`$graph/${g}/numberfrom/${b}`, nfr + 1),
+      ); await Promise.all(p)
+    }
+    $.deledge = async (a, b, g = current_graph) => {
+      const p = [], [o, n, nto, nfr] = await Promise.all([
+        idb.get(`$graph/${g}/to/${a}/${b}`),
+        idb.get(`$graph/${g}/to/${a}/${b}/name`),
+        idb.get(`$graph/${g}/numberto/${a}`),
+        idb.get(`$graph/${g}/numberfrom/${b}`)])
+      if (!o) { throw Error(`edge not exist: ${$a} -> ${b}`) }
+      if (typeof nto !== 'number') { throw Error(`node not exist: ${a}`) }
+      if (typeof nfr !== 'number') { throw Error(`node not exist: ${b}`) }
+      p.push(idb.del(`$graph/${g}/to/${a}/${b}`),
+        idb.set(`$graph/${g}/numberto/${a}`, nto - 1),
+        idb.del(`$graph/${g}/from/${b}/${a}`),
+        idb.set(`$graph/${g}/numberfrom/${b}`, nfr - 1))
+      if (n) p.push(idb.del(`$graph/${g}/${a}/${n}`),
+        idb.del(`$graph/${g}/to/${a}/${b}/name`))
+      await Promise.all(p)
+    }
+    $.deledgebyname = async (a, n, g = current_graph) => {
+      const b = await idb.get(`$graph/${g}/${a}/${n}`)
+      if (!b) { throw Error(`edge not exist: ${a}:${n}`) }
+      await deledge(a, b, g)
+    }
+    $.renameedge = async (a, n, nn, g = current_graph) => {
+      const b = await idb.get(`$graph/${g}/${a}/${n}`)
+      if (!b) { throw Error(`edge not exist: ${a}:${n}`) }
+      const p = [
+        idb.del(`$graph/${g}/${a}/${n}`),
+        idb.set(`$graph/${g}/${a}/${nn}`, b),
+        idb.set(`$graph/${g}/to/${a}/${b}/name`, nn),
+      ]; await Promise.all(p)
+    }
+  } return $
+}
+
+$.giteditor = ($ = { gt: git(), g: graph(), db: fakeidb() }) => {
+  with ($) {
+    gt.db = db
+    $.newver = () => { newrepo() }
     $.frame = () => { g.frame() }
     Object.defineProperty($, 'elm', { get: () => g.se })
   } return $
 }
+
+$.ge = giteditor()
+document.body.append(ge.elm)
+listenframe(() => ge.frame())
+
+$.idb = fakeidb()
+$.gdb = graphdb()
+
+$.logidb = (a = ['']) => {
+  for (const k in idb.o) { a.push(k, idb.o[k], '\n') } log(...a)
+}
+
+$.uuid_length = 4
+
 {
-  let ge = giteditor()
-  gengraph(25, ge.g)
-  document.body.append(ge.elm)
-  listenframe(() => { ge.frame() })
+  // nextseed(124759)
+  const { floor, abs } = Math, ids = [], g = gdb, l = 10
+  for (let i = 0; i < l; i++) {
+    const id = await g.addnode()
+    ids.push(id)
+    ge.g.addnode(id)
+  }
+  for (let i = 0; i < l; i++) {
+    let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
+    const a = ids[i], s = [...ids]
+    for (let j = 0; j < r && s.length > 0; j++) {
+      const bi = floor(rd(s.length))
+      const b = s.splice(bi, 1)[0]
+      if (rd() > 0.0) {
+        const n = 'NAME_' + bi
+        await g.addedge(a, b, n)
+        ge.g.addedge(a, b, n)
+      } else { await g.addedge(a, b); ge.g.addedge(a, b) }
+    }
+  }
+  // logidb()
 }
