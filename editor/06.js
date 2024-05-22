@@ -1,4 +1,4 @@
-// 06.js - git editor
+// 06.js - basic graph editor
 //# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
@@ -139,7 +139,7 @@ $.indexeddb = (name = "default", store = "default") => {
         d.onupgradeneeded = () => f(d.result)))))
     $.action = (cb, type = 'readwrite', s = store) => dbp.then(db => new Promise(
       (r, j, t = db.transaction(s, type)) => (t.oncomplete = r, t.onabort =
-        t.onerror = () => j(t.error), cb(t => t.objectStore(store)))))
+        t.onerror = () => j(t.error), cb(t.objectStore(store)))))
     $.ro = f => action(f, "readonly"), $.rw = f => action(f)
     $.get = (k, r) => ro(s => r = s.get(k)).then(() => r.result)
     $.set = (k, v) => rw(s => s.put(v, k))
@@ -362,7 +362,7 @@ $.texteditor = () => {
 $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
   with ($) {
     $.addnode = (id = i++) => {
-      g[id] = { id, to: {}, from: {}, nto: 0, nfrom: 0 }
+      g[id] = { id, to: {}, from: {}, nto: 0, nfrom: 0, child: {} }
       newnodeelm(g[id]); return id
     }
     $.delnode = (id, n = g[id]) => {
@@ -370,15 +370,30 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       for (const k in n.from) { deledge(k, id) } n.elm.remove()
     }
     $.addedge = (a, b, n) => {
-      const o = { o: g[b] }; if (n) { o.name = n }
+      const o = { o: g[b] }; if (n) { o.name = n, g[a].child[n] = b }
       g[a].to[b] = o, g[b].from[a] = g[a]
       g[a].nto++, g[b].nfrom++, newedgeelm(g[a], g[b])
     }
     $.deledge = (a, b) => {
+      let n = g[a].to[b].name; if (n) { delete g[a].child[n] }
       g[a].to[b].elm.remove(), g[a].nto--, g[b].nfrom--
       delete g[a].to[b], delete g[b].from[a]
     }
+    $.deledgebyname = (a, n) => deledge(a, g[a].child[n])
+    $.nameedge = (a, b, n) => (
+      g[a].child[n] = b, g[a].to[b].name = n, updateedgename(g[a].to[b]))
+    $.unnameedge = (a, b, n = g[a].to[b].name) => (
+      delete g[a].child[n], delete g[a].to[b].name, updateedgename(g[a].to[b]))
+    $.unnameedgebyname = (a, n, b = g[a].child[n]) => (
+      delete g[a].child[n], delete g[a].to[b].name, updateedgename(g[a].to[b]))
+    $.renameedge = (a, n, nn, b = g[a].child[n]) => (delete g[a].child[n],
+      g[a].child[nn] = b, g[a].to[b].name = nn, updateedgename(g[a].to[b]))
     $.clear = () => { g = {}, sep.innerHTML = sen.innerHTML = '' }
+
+    $.updatenodename = () => { }
+    $.updateedgename = () => { }
+
+    $.rd = genrd(795304884).rd
     $.newpos = (n, d = n.data) => {
       d.pos = { x: rd(-1, 1) * target_length, y: rd(-1, 1) * target_length }
       d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
@@ -574,15 +589,14 @@ $.graphdb = ($ = eventnode({})) => {
         idb.getpath(`$graph/${g}/to/${id}`),
         idb.getpath(`$graph/${g}/from/${id}`),
         idb.getpath(`$graph/${g}/${id}/`)
-      ]), p = [idb.del(`$graph/${g}/${id}`, true),
-      idb.del(`$graph/${g}/numberto/${id}`),
-      idb.del(`$graph/${g}/numberfrom/${id}`),
-      ...to.map(([k]) => idb.del(`$graph/${g}/${id}/` + k)),
-      ...from.map(([k]) => idb.del(`$graph/${g}/to/${id}` + k)),
-      ...keys.map(([k]) => idb.del(`$graph/${g}/from/${id}` + k)),
-      ...to.map(k => deledge(id, k)),
-      ...from.map(k => deledge(k, id)),
-      ]; await Promise.all(p)
+      ]); await Promise.all([
+        ...to.map(([k]) => deledge(id, k)),
+        ...from.map(([k]) => deledge(k, id)),
+      ]); await Promise.all([
+        ...keys.map(([k]) => idb.del(`$graph/${g}/${id}/` + k)),
+        idb.del(`$graph/${g}/${id}`, true),
+        idb.del(`$graph/${g}/numberto/${id}`),
+        idb.del(`$graph/${g}/numberfrom/${id}`)])
     }
     $.addedge = async (a, b, n, g = current_graph) => {
       const p = [], [c, nto, nfr] = await Promise.all([
@@ -593,7 +607,7 @@ $.graphdb = ($ = eventnode({})) => {
       if (typeof nto !== 'number') { throw Error(`node: ${a} not exist`) }
       if (typeof nfr !== 'number') { throw Error(`node: ${b} not exist`) }
       if (n) p.push(idb.set(`$graph/${g}/${a}/${n}`, b),
-        idb.set(`$graph/${g}/to/${a}/${b}/name`, n))
+        idb.set(`$graph/${g}/edge/${a}/${b}/name`, n))
       p.push(idb.set(`$graph/${g}/to/${a}/${b}`, true),
         idb.set(`$graph/${g}/from/${b}/${a}`, true),
         idb.set(`$graph/${g}/numberto/${a}`, nto + 1),
@@ -603,7 +617,7 @@ $.graphdb = ($ = eventnode({})) => {
     $.deledge = async (a, b, g = current_graph) => {
       const p = [], [o, n, nto, nfr] = await Promise.all([
         idb.get(`$graph/${g}/to/${a}/${b}`),
-        idb.get(`$graph/${g}/to/${a}/${b}/name`),
+        idb.get(`$graph/${g}/edge/${a}/${b}/name`),
         idb.get(`$graph/${g}/numberto/${a}`),
         idb.get(`$graph/${g}/numberfrom/${b}`)])
       if (!o) { throw Error(`edge not exist: ${$a} -> ${b}`) }
@@ -614,7 +628,7 @@ $.graphdb = ($ = eventnode({})) => {
         idb.del(`$graph/${g}/from/${b}/${a}`),
         idb.set(`$graph/${g}/numberfrom/${b}`, nfr - 1))
       if (n) p.push(idb.del(`$graph/${g}/${a}/${n}`),
-        idb.del(`$graph/${g}/to/${a}/${b}/name`))
+        idb.del(`$graph/${g}/edge/${a}/${b}/name`))
       await Promise.all(p)
     }
     $.deledgebyname = async (a, n, g = current_graph) => {
@@ -622,14 +636,36 @@ $.graphdb = ($ = eventnode({})) => {
       if (!b) { throw Error(`edge not exist: ${a}:${n}`) }
       await deledge(a, b, g)
     }
+    $.nameedge = async (a, b, n, g = current_graph) => {
+      const [c, on] = await Promise.all([
+        idb.get(`$graph/${g}/to/${a}/${b}`),
+        idb.get(`$graph/${g}/edge/${a}/${b}/name`)])
+      if (!c) { throw Error(`edge not exist: ${$a} -> ${b}`) }
+      if (on) { throw Error(`edge exist: ${$a}:${on}`) }
+      await Promise.all([idb.set(`$graph/${g}/${a}/${n}`, b),
+      idb.set(`$graph/${g}/edge/${a}/${b}/name`, n)])
+    }
+    $.unnameedge = async (a, b, g = current_graph) => {
+      const [c, n] = await Promise.all([
+        idb.get(`$graph/${g}/to/${a}/${b}`),
+        idb.get(`$graph/${g}/edge/${a}/${b}/name`)])
+      if (!c) { throw Error(`edge not exist: ${$a} -> ${b}`) }
+      if (!n) { throw Error(`edge name not exist: ${$a} -> ${b}`) }
+      await Promise.all([idb.del(`$graph/${g}/${a}/${n}`),
+      idb.set(`$graph/${g}/edge/${a}/${b}/name`)])
+    }
+    $.unnameedgebyname = async (a, n, g = current_graph) => {
+      const b = await idb.get(`$graph/${g}/${a}/${n}`)
+      if (!b) { throw Error(`edge not exist: ${a}:${n}`) }
+      await Promise.all([idb.del(`$graph/${g}/${a}/${n}`),
+      idb.del(`$graph/${g}/edge/${a}/${b}/name`)])
+    }
     $.renameedge = async (a, n, nn, g = current_graph) => {
       const b = await idb.get(`$graph/${g}/${a}/${n}`)
       if (!b) { throw Error(`edge not exist: ${a}:${n}`) }
-      const p = [
-        idb.del(`$graph/${g}/${a}/${n}`),
-        idb.set(`$graph/${g}/${a}/${nn}`, b),
-        idb.set(`$graph/${g}/to/${a}/${b}/name`, nn),
-      ]; await Promise.all(p)
+      await Promise.all([idb.del(`$graph/${g}/${a}/${n}`),
+      idb.set(`$graph/${g}/${a}/${nn}`, b),
+      idb.set(`$graph/${g}/edge/${a}/${b}/name`, nn)])
     }
   } return $
 }
@@ -645,37 +681,43 @@ $.giteditor = ($ = { gt: git(), g: graph(), db: fakeidb() }) => {
 
 $.ge = giteditor()
 document.body.append(ge.elm)
-listenframe(() => ge.frame())
 
+// $.idb = indexeddb('graph-database')
 $.idb = fakeidb()
 $.gdb = graphdb()
 
-$.logidb = (a = ['']) => {
-  for (const k in idb.o) { a.push(k, idb.o[k], '\n') } log(...a)
+$.logidb = (a = [''], i = 0) => {
+  for (const k in idb.o) { a.push(k, idb.o[k], '\n'), i++ }
+  log(...a, i)
 }
 
 $.uuid_length = 4
 
+$.grapheditor = ($ = { g: graph(), gdb: graphdb() }) => {
+  with ($) {
+    const a = ('addnode delnode addedge deledge deledgebyname ' +
+      'nameedge unnameedge unnameedgebyname renameedge').split(' ')
+    for (const n of a) $[n] =
+      async (...a) => (await gdb[n](...a), g[n](...a))
+    Object.defineProperty($, 'elm', { get: () => g.se })
+  } return $
+}
+
 {
-  // nextseed(124759)
-  const { floor, abs } = Math, ids = [], g = gdb, l = 10
-  for (let i = 0; i < l; i++) {
-    const id = await g.addnode()
-    ids.push(id)
-    ge.g.addnode(id)
-  }
+  nextseed(124759)
+  // nextseed(934502730)
+  const { floor, abs } = Math, ids = [], g = gdb, l = 25
+  for (let i = 0; i < l; i++) ids.push([await g.addnode(), ge.g.addnode()])
   for (let i = 0; i < l; i++) {
     let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
-    const a = ids[i], s = [...ids]
+    const [a, ai] = ids[i], s = [...ids]
     for (let j = 0; j < r && s.length > 0; j++) {
-      const bi = floor(rd(s.length))
-      const b = s.splice(bi, 1)[0]
-      if (rd() > 0.0) {
-        const n = 'NAME_' + bi
-        await g.addedge(a, b, n)
-        ge.g.addedge(a, b, n)
-      } else { await g.addedge(a, b); ge.g.addedge(a, b) }
+      const [b, bi] = s.splice(floor(rd(s.length)), 1)[0]
+      const n = 'NAME_' + bi; if (rd() > 0.0) {
+        await g.addedge(a, b, n); ge.g.addedge(ai, bi, n)
+      } else { await g.addedge(a, b); ge.g.addedge(ai, bi) }
     }
   }
-  // logidb()
+  logidb()
+  listenframe(() => ge.frame())
 }
