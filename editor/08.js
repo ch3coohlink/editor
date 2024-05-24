@@ -1,4 +1,4 @@
-// 07.js - git editor
+// 08.js - git editor (deprecated)
 //# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
@@ -687,11 +687,19 @@ $.graphdb = ($ = eventnode({})) => {
         .then(a => Promise.all(a.map(([k]) =>
           idb.get(`$graph/${g}/edgename/${id}/${k}`)
             .then(n => [id, k, n])))))).then(a => a.flat(1))
+
+    $.getonlyparent = (n, g = current_graph) =>
+      getpath(`$graph/${g}/from/${n}`).then(a => {
+        if (a.length < 0) { throw `no parent` }
+        if (a.length > 1) { throw `too many parent` }
+        return a[0][0]
+      })
+
   } return $
 }
 
-$.idb = indexeddb('graph-database')
-// $.idb = fakeidb()
+// $.idb = indexeddb('graph-database')
+$.idb = fakeidb()
 
 $.gengraph = async () => {
   nextseed(124759)
@@ -733,19 +741,41 @@ $.grapheditor = ($ = { g: graph(), gdb: graphdb(), idb }) => {
   } return $
 }
 
-$.giteditor = ($ = {}) => {
+$.giteditor = ($ = gdb()) => {
   with ($) {
-    $.read = async (ver, path) => { }
-    $.dir = async ver => { }
-    $.vercheck = async ver => { }
+    $.locatebypath = async (node, path, g = current_graph) => {
+      path = path.split('/'); let n = node, name
+      while (path.length > 0) {
+        let t = await getprop(n, 'type')
+        if (t === 'link') { n = await getprop(n, 'value') }
+        name = path.shift(); if (name === '.') { continue }
+        else if (name === '..') {
+          n = await getonlyparent(n, g)
+        } else {
+          n = await getprop(n, name, g)
+          if (!n) { throw `no such path: ${path}` }
+        }
+      } return n
+    }
+    $.read = (ver, path) =>
+      locatebypath(ver, path).then(async n => {
+        const [value, type] = await Promise.all([
+          getprop(n, 'value'), getprop(n, 'type')])
+        if (type === 'file') { return await getprop(value, 'value') }
+        else if (type === 'link') { return { type, value } }
+        else if (type === 'dir') { return { type, value } }
+      })
+    $.dir = async ver => getalledge([ver]).then(v =>
+      Promise.all(v.map(([, b]) => get))
+    )
     $.write = async (ver, name, text) => { }
     $.link = async (ver, name, ref) => { }
     $.remove = async (ver, name) => { }
     $.rename = async (ver, on, nn) => { }
     $.newver = async prev => { }
     $.merge = async (a, b) => { }
-    $.writedes = ver => {}
-    $.readdes = ver => {}
+    $.writedes = ver => { }
+    $.readdes = ver => { }
   } return $
 }
 

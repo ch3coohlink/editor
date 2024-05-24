@@ -690,11 +690,11 @@ $.graphdb = ($ = eventnode({})) => {
   } return $
 }
 
-$.idb = indexeddb('graph-database')
-// $.idb = fakeidb()
+// $.idb = indexeddb('graph-database')
+$.idb = fakeidb()
 
 $.gengraph = async () => {
-  nextseed(124759)
+  // nextseed(124759)
   // nextseed(934502730)
   const { floor, abs } = Math, ids = [], g = ge.gdb, l = 25
   for (let i = 0; i < l; i++) {
@@ -712,7 +712,7 @@ $.gengraph = async () => {
       else { await g.addedge(a, b) }
     }
   }
-  g.logidb()
+  idb.logidb()
 }
 
 $.grapheditor = ($ = { g: graph(), gdb: graphdb(), idb }) => {
@@ -735,5 +735,6 @@ $.grapheditor = ($ = { g: graph(), gdb: graphdb(), idb }) => {
 
 $.ge = grapheditor()
 document.body.append(ge.elm)
+await gengraph()
 await ge.sync()
 listenframe(() => ge.frame())
