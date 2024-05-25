@@ -229,9 +229,9 @@ $.graph = ($ = { g: {}, i: 0 }) => {
       delete g[a].children[n], g[a].children[nn] = b, g[a].to[b].name = nn)
     $.deltree = n => { for (const k in g[n].to) { deltree(k) } delnode(n) }
     $.addtonode = (a, name, id) => {
+      if (!g[a]) { throw `non exist node: ${a}` }
       const b = addnode(id); addedge(a, b.id, name); return b
     }
-
     $.clear = () => g = {}
   } return $
 }
@@ -260,40 +260,236 @@ $.git = ($ = graph()) => {
       else if (type === 'link') { return { type, value } }
       else if (type === 'dir') { return { type } }
     }
-    $.dir = ver => Object.keys(g[ver].to).map(k => g[ver].to[k].o)
     $.addhashobj = (h, t) => {
       const o = addnode(h); o.type = 'hashobj', o.value = t
     }
-    $.write = (ver, path, text) => {
-      path = path.split('/'); const name = path.splice(-1)
-      const loc = locatebypath(ver, path), b = addtonode(loc, name)
-      const h = hexenc(sha256(text))
+    $.writefile = (loc, name, text) => {
+      const b = addtonode(loc, name), h = hexenc(sha256(text))
       if (g[h]) { addhashobj(h, text) } addedge(b, h)
       b.type = 'file', b.value = h
     }
-    $.writedir = (ver, path) => {
-      path = path.split('/'); const name = path.splice(-1)
-      const loc = locatebypath(ver, path), b = addtonode(loc, name)
-      b.type = 'dir'
+    $.writedir = (loc, name) => {
+      const b = addtonode(loc, name); b.type = 'dir'
     }
-    $.link = (ver, path, ref) => {
-      path = path.split('/'); const name = path.splice(-1)
-      const loc = locatebypath(ver, path), b = addtonode(loc, name)
-      b.type = 'link', b.value = ref
+    $.writelink = (loc, name, ref) => {
+      const b = addtonode(loc, name); b.type = 'link', b.value = ref
     }
-
-    $.remove = (ver, path) => deltree(locatebypath(ver, path))
-    $.rename = (ver, path, nn) => {
-      path = path.split('/'); const name = path.splice(-1)
-      const loc = locatebypath(ver, path), b = addtonode(loc, name)
+    $.newver = prev => {
+      const o = prev ? addtonode(prev) : addnode(p)
+      o.verid = uuid(); return o
     }
-
-    $.newver = prev => { }
     $.merge = (a, b) => { }
-    $.writedes = ver => { }
-    $.readdes = ver => { }
+    $.writedes = (ver, text) => { g[ver].description = text }
+    $.readdes = ver => delete g[ver].description
   } return $
 }
 
-log(hexenc(sha256('3453h2fdfw42f2eg3rg')))
-log(await sha256async('3453h2fdfw42f2eg3rg'))
+$.graphlayout = ($ = eventnode({ gr: graph() })) => {
+  with ($) {
+    $.addnode = id => newnodeelm(gr.addnode(id))
+    $.delnode = id => (gr.delnode(...a), gr.g[id].elm.remove())
+    $.addedge = (a, b, n) => (gr.addedge(a, b, n), newedgeelm(gr.g[a], gr.g[b]))
+    $.deledge = (a, b) => (gr.deledge(a, b), gr.g[a].to[b].elm.remove())
+    $.nameedge = (a, b, n) => { }
+    $.unnameedge = (a, b) => { }
+    $.unnameedgebyname = (a, n) => { }
+    $.renameedge = (...a) => { }
+    $.deltree = (...a) => { }
+    $.addtonode = (...a) => { }
+    $.clear = (...a) => { }
+    $.namenode = (n, name, t = n.elm.text) => (
+      t.textContent = name, t.setAttribute('transform',
+        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`))
+    $.updateedgename = c =>
+      c.name ? c.elm.text.textContent = c.name : 0
+
+    $.rd = genrd(795304884).rd
+    $.newpos = (n, d = n.data) => {
+      d.pos = { x: rd(-1, 1) * target_length, y: rd(-1, 1) * target_length }
+      d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
+      d.mat = 1, d.ecc = 1; return n
+    }
+    const { sqrt, max, min, sign, abs } = Math
+    $.layout = ns => {
+      const electric = (b, p, ad, ap, m = 1) => {
+        const bd = b.data, bp = bd.pos
+        const pdx = bp.x - ap.x, pdy = bp.y - ap.y
+        const lsq = max(pdx * pdx + pdy * pdy, m), l = sqrt(lsq)
+        const f = ad.ecc * bd.ecc / lsq * p / l
+        const fx = f * pdx, fy = f * pdy
+        ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
+        bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
+      }
+      const distance = (b, p, ad, ap) => {
+        const bd = b.data, bp = bd.pos
+        const pdx = bp.x - ap.x, pdy = bp.y - ap.y
+        const fx = p * pdx, fy = p * pdy
+        ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
+        bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
+      }
+      const gravity = newpos({ data: {} }); total_speed = 0
+      gravity.data.pos.x = gravity.data.pos.y = 0
+      let tl = target_length, ts = target_speed, dt = 0.05
+      let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
+      for (let i = 0, l = ns.length; i < l; i++) {
+        const a = ns[i], ad = a.data, ap = ad.pos
+        for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
+        for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
+        if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
+        distance(gravity, 0.05 * ed, ad, ap)
+        let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
+        let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
+        total_speed += v = max(min(v, ts) - ts * friction, 0)
+        ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
+        if (ad.lock) { ad.vec.x = ad.vec.y = 0; continue }
+        ap.x += vx * dt, ap.y += vy * dt
+        ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
+      } layouttime += time.realdelta
+    }
+    $.target_length = 125, $.target_speed = 250, $.friction = 0.01
+    $.draw = ns => {
+      const w = se.clientWidth, h = se.clientHeight
+      const x = w / 2 + camera.x, y = h / 2 + camera.y
+      const transtr = `translate(${sorigin.x}, ${sorigin.y}) scale(${camera.s}) translate(${x}, ${y})`
+      sep.setAttribute('transform', transtr)
+      sep.setAttribute('fill', 'none')
+      sep.setAttribute('stroke', 'black')
+      sep.setAttribute('stroke-width', linewidth + 'px')
+      sep.setAttribute('stroke-linecap', 'round')
+      sen.setAttribute('transform', transtr)
+      if (stop) { return } for (const n of ns) {
+        const { x, y } = n.data.pos, e = n.elm
+        e.setAttribute('transform', `translate(${x}, ${y})`)
+        for (const k in n.to) {
+          const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = 2
+          if (b.o === n) {
+            const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
+            e.path.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
+              `a ${r},${r} 0 1,0 ${-r2}, 0 a ${r},${r} 0 1,0 ${r2}, 0 ` +
+              `M ${x + r2 + c} ${y + c} L ${x + r2} ${y} L ${x + r2 - c} ${y + c}`)
+            e.text.setAttribute('transform', `translate(${x + r2} ${y})`)
+          } else {
+            let dx = bp.x - x, dy = bp.y - y, s = 0.6, c = arws
+            let mx = x + dx * 0.5, my = y + dy * 0.5
+            mx = x + dx * s, my = y + dy * s
+            e.text.setAttribute('transform', `translate(${mx}, ${my})`)
+            let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
+            e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+              `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+          }
+        }
+      }
+    }
+    $.stop = false, $.layouttime = 0, $.multirun = 4
+    $.total_speed = 0, $.total_accelaration = 0
+    $.frame = () => {
+      const ns = [], es = [], g = gr.g; for (const k in g) {
+        const n = g[k]; if (!n.data) { n.data = {} } const d = n.data
+        if (!d.pos) { newpos(n) } ns.push(n); const e = []
+        for (const id in n.to) { e.push(n, n.to[id].o) } es.push(e)
+      } if (!stop) {
+        for (let i = 0; i < multirun; i++) { layout(ns) }
+        if (total_speed === 0) { emit('layoutend', layouttime), stop = true }
+      } draw(ns)
+    }
+    $.reset = () => { stop = false, layouttime = 0 }
+    $.camera = { x: 0, y: 0, s: 1 }
+    $.sorigin = { x: 0, y: 0 } // scale origin
+    $.screen2svgcoord = (c = camera) => (x, y) => {
+      const w = se.clientWidth, h = se.clientHeight
+      x = (x - sorigin.x) / camera.s - (c.x + w / 2)
+      y = (y - sorigin.y) / camera.s - (c.y + h / 2)
+      return { x, y }
+    }
+    const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
+    // + `svg text { fill: white; stoke: black; stroke-width: 0.2px; font-size: 10px; }`
+    $.se = svg('svg'); se.style.display = 'block'
+    se.style.userSelect = se.style.touchAction = 'none'
+    se.style.height = se.style.width = '100%'
+    $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
+    listenpointerdown(se, e => {
+      if (e.target !== se) { return }
+      const c = { ...camera }, s = screen2svgcoord(c)
+      const o = s(...geteventlocation(e)), m = e => {
+        if (e.touches && e.touches.length > 2) { return emit('3finger', e) }
+        if (e.touches && e.touches.length === 2) { return pinch(e) }
+        const { x, y } = s(...geteventlocation(e))
+        camera.x = c.x + x - o.x, camera.y = c.y + y - o.y
+      }; listenpointermove(m), listenpointerup(() => (
+        lpd = null, cancelpointermove(m)))
+    }) // last pinch distance
+    $.lpd = null, $.pinch = (e, et = e.touches) => {
+      const { left: l, top: t } = se.getBoundingClientRect()
+      let a = { x: et[0].pageX - l, y: et[0].pageY - t }
+      let b = { x: et[1].pageX - l, y: et[1].pageY - t }
+      let d = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2)
+      if (d === lpd) { return } if (lpd === null) { lpd = d }
+      zoom([(a.x + b.x) / 2, (a.y + b.y) / 2], d / lpd); lpd = d
+    }
+    se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
+      ? zoom(geteventlocation(e), r) : zoom(geteventlocation(e), 1 / r))
+    $.zoom = ([x, y], f, s) => (s = camera.s,
+      camera.s = s * f, f = camera.s / s,
+      sorigin.x = x - (x - sorigin.x) * f,
+      sorigin.y = y - (y - sorigin.y) * f)
+    $.circlesize = 7, $.linewidth = 1
+    $.newnodeelm = n => {
+      const g = svg('g'), c = svg('circle'), t = svg('text')
+      if (n.name) { t.textContent = n.name } g.text = t
+      g.append(c, t), sen.append(g)
+      c.setAttribute('r', circlesize + 'px')
+      t.setAttribute('fill', 'white')
+      t.setAttribute('stroke', 'black')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      t.setAttribute('transform',
+        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)
+      listenpointerdown(c, e => {
+        if (e.target !== c) { return } const m = e => {
+          if (e.touches && e.touches.length > 1) { return }
+          c.setAttribute('fill', 'red'); reset()
+          const { x, y } = screen2svgcoord()(...geteventlocation(e))
+          n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+        }; listenpointermove(m), listenpointerup(() => (
+          c.removeAttribute('fill'),
+          delete n.data.lock, cancelpointermove(m)))
+      }); n.elm = g; return n
+    }
+    $.newedgeelm = (a, b) => {
+      const g = svg('g'), p = svg('path'), t = svg('text')
+      const c = a.to[b.id], n = c.name
+      t.setAttribute('fill', 'black')
+      t.setAttribute('stroke', 'white')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      if (n) { t.textContent = n }
+      c.elm = g, g.path = p; g.text = t
+      g.append(p, t), sep.append(g)
+    }
+    $.geteventlocation = (e, ef = e.touches) => {
+      const { left: l, top: t } = se.getBoundingClientRect()
+      return ef && ef.length == 1 ?
+        [ef[0].pageX - l, ef[0].pageY - t] : [e.pageX - l, e.pageY - t]
+    }
+  } return $
+}
+
+$.gengraph = (l = 10, g = graphlayout()) => {
+  const { floor, abs } = Math, ids = []
+  for (let i = 0; i < l; i++) { ids.push(g.addnode().id) }
+  for (let i = 0; i < l; i++) {
+    let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
+    const a = ids[i], s = [...ids]
+    for (let j = 0; j < r && s.length > 0; j++)
+      g.addedge(a, s.splice(floor(rd(s.length)), 1)[0])
+  } return g
+}
+
+document.body.style.display = 'flex'
+document.body.style.flexFlow = 'column'
+{
+  let g = gengraph(25)
+  // g.on('3finger', () => reset())
+  document.body.append(g.se)
+  listenframe(() => { if (g) { g.frame() } })
+}
