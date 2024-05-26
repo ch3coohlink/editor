@@ -1,0 +1,11 @@
+- [x] hash file
+- [x] diff
+- [ ] merge
+- [ ] text editor tab
+- [x] version graph and file explorer
+- [x] fade in out animation for graph node
+- [ ] record open state in git graph
+- [ ] serialization
+- [ ] save file to disk
+- [ ] reformat giteditor to extend git
+- [ ] soft link in graph layout

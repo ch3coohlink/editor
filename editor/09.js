@@ -394,6 +394,7 @@ $.graphlayout = ($ = graph()) => {
       d.mat = 1, d.ecc = 1; return n
     }
     const { sqrt, max, min, sign, abs } = Math
+    const gravity = newpos({ data: {} }, 0, 0)
     $.layout = ns => {
       const electric = (b, p, ad, ap, m = 1) => {
         const bd = b.data, bp = bd.pos
@@ -403,16 +404,14 @@ $.graphlayout = ($ = graph()) => {
         const fx = f * pdx, fy = f * pdy
         ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
         bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
-      }
-      const distance = (b, p, ad, ap) => {
+      }, distance = (b, p, ad, ap) => {
         const bd = b.data, bp = bd.pos
         const pdx = bp.x - ap.x, pdy = bp.y - ap.y
         p *= ad.ecc * bd.ecc
         const fx = p * pdx, fy = p * pdy
         ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
         bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
-      }
-      const gravity = newpos({ data: {} }, 0, 0); total_speed = 0
+      }; total_speed = 0
       let tl = target_length, ts = target_speed, dt = 0.05
       let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
       for (let i = 0, l = ns.length; i < l; i++) {
