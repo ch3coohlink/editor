@@ -205,11 +205,14 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
   with ($) {
     $.addnode = (id = i++) => {
       const o = { id, to: {}, from: {}, nto: 0, nfrom: 0, children: {} }
+      Reflect.defineProperty(o, 'setname',
+        { set: v => (o.name = v, emit('namenode', { o })) })
       g[id] = o; emit('addnode', { id, o }); return o
     }
     $.delnode = (id, n = g[id]) => {
-      for (const k in n.to) { deledge(id, k) } delete g[id]
-      for (const k in n.from) { deledge(k, id) } emit('delnode', { id, o })
+      for (const k in n.to) { deledge(id, k) }
+      for (const k in n.from) { deledge(k, id) }
+      delete g[id], emit('delnode', { id, o: n })
     }
     $.addedge = (a, b, n) => {
       const o = { o: g[b] }; if (n) { o.name = n, g[a].children[n] = b }
@@ -217,7 +220,6 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       g[a].nto++, g[b].nfrom++, emit('addedge', { a, b, o })
     }
     $.deledge = (a, b) => {
-      let ao = g[a]
       let o = g[a].to[b], n = o.name; if (n) { delete g[a].children[n] }
       delete g[a].to[b], delete g[b].from[a]
       g[a].nto--, g[b].nfrom--, emit('deledge', { a, b, o })
@@ -230,19 +232,25 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
     $.renameedge = (a, n, nn, b = g[a].children[n]) => (delete g[a].children[n],
       g[a].children[nn] = b, g[a].to[b].name = nn, emit('nameedge', { o: g[a].to[b] }))
-    $.deltree = n => { for (const k in g[n].to) { deltree(k) } delnode(n) }
+    $.deltree = (n, l = 0) => {
+      const c = g[n].children
+      for (const k in c) { deltree(c[k], l - 1) }
+      if (l <= 0) { delnode(n) }
+    }
     $.addtonode = (a, name, id) => {
       if (!g[a]) { throw `non exist node: ${a}` }
-      const b = addnode(id); addedge(a, b.id, name); return b
+      const b = addnode(id); addedge(a, b.id, name)
+      emit('addtonode', { o: b })
+      return b
     }
-    $.clear = () => g = {}
+    $.clear = () => (g = {}, emit('clear'))
   } return $
 }
 
 $.git = ($ = graph()) => {
   with ($) {
     $.locatebypath = (node, path = '') => {
-      if (!Array.isarr(path)) { path = path.split('/') }
+      if (!Array.isArray(path)) { path = path.split('/') }
       let n = node, name; while (path.length > 0) {
         let t = g[n].type
         if (t === 'link') { n = g[n].value }
@@ -261,14 +269,14 @@ $.git = ($ = graph()) => {
       const value = g[n].value, type = g[n].type
       if (type === 'file') { return g[value].value }
       else if (type === 'link') { return { type, value } }
-      else if (type === 'dir') { return { type } }
+      else if (type === 'dir') { return { type, id: n } }
     }
     $.addhashobj = (h, t) => {
       const o = addnode(h); o.type = 'hashobj', o.value = t
     }
-    $.writefile = (loc, name, text) => {
-      const b = addtonode(loc, name), h = hexenc(sha256(text))
-      if (g[h]) { addhashobj(h, text) } addedge(b, h)
+    $.writefile = (loc, name, text, h = hexenc(sha256(text))) => {
+      const b = addtonode(loc, name)
+      if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
       b.type = 'file', b.value = h; return b
     }
     $.writedir = (loc, name) => {
@@ -279,17 +287,26 @@ $.git = ($ = graph()) => {
       const b = addtonode(loc, name)
       b.type = 'link', b.value = ref; return b
     }
+    const copytree = (a, b) => {
+      const c = g[a].children
+      for (const t in c) {
+        const edge = g[a].to[c[t]]
+        const o = edge.o
+        const target = addtonode(b, edge.name)
+        target.type = o.type
+        if (o.type === 'file') {
+          addedge(target.id, target.value = o.value)
+        } else if (o.type === 'link') {
+          target.value = o.value
+        } else if (o.type === 'dir') {
+          copytree(c[t], target.id)
+        }
+      }
+    }
     $.newver = prev => {
       if (prev !== undefined) { o = addtonode(prev) }
       else { o = addnode() } o.type = 'version', o.verid = uuid()
       if (prev !== undefined) { copytree(prev, o.id) } return o
-    }
-    $.copytree = (a, b) => {
-      for (const t in g[a].to) if (g[t].type !== 'version') {
-        copytree(t, addtonode(b, g[a].to[t].name).id)
-        log(t)
-        // Object.assign(g[a], g[b])
-      }
     }
     $.merge = (a, b) => { }
     $.writedes = (ver, text) => { g[ver].description = text }
@@ -297,38 +314,33 @@ $.git = ($ = graph()) => {
   } return $
 }
 
-$.graphlayout = ($ = eventnode({ g: graph() })) => {
+$.graphlayout = ($ = graph()) => {
   with ($) {
-    g.on('addnode', ({ o }) => newnodeelm(o))
-    g.on('delnode', ({ o }) => o.elm.remove())
-    g.on('addedge', ({ o }) => newedgeelm(o))
-    g.on('deledge', ({ o }) => o.elm.remove())
-    g.on('nameedge', ({ o }) => nameedgeelm(o))
-    $.addnode = id => newnodeelm(g.addnode(id))
-    $.delnode = id => (g.delnode(...a), g.g[id].elm.remove())
-    $.addedge = (a, b, n) => (g.addedge(a, b, n), newedgeelm(g.g[a], g.g[b]))
-    $.deledge = (a, b) => (g.deledge(a, b), g.g[a].to[b].elm.remove())
-    $.nameedge = (a, b, n) => (g.nameedge(a, b, n), nameedgeelm(g.g[a].to[b]))
-    $.unnameedge = (a, b) => (g.unnameedge(a, b), nameedgeelm(g.g[a].to[b]))
-    $.unnameedgebyname = (a, n, b = g.g[a].children[n]) => (
-      g.unnameedgebyname(a, n, b), nameedgeelm(g.g[a].to[b]))
-    $.renameedge = (a, n, nn, b = g.g[a].children[n]) => (
-      g.nameedge(a, n, nn, b), nameedgeelm(g.g[a].to[b]))
-    $.deltree = n => { for (const k in g[n].to) { deltree(k) } delnode(n) }
-    $.addtonode = (a, n, id) => {
-      if (!g.g[a]) { throw `non exist node: ${a}` }
-      const b = addnode(id); addedge(a, b.id, name); return b
-    }
-    $.clear = () => (g.clear(), sep.innerHTML = sen.innerHTML = '')
-    $.namenode = (n, name, t = n.elm.text) => (
-      t.textContent = name, t.setAttribute('transform',
-        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`))
-    $.nameedgeelm = c => c.name ? c.elm.text.textContent = c.name : 0
+    on('addnode', ({ o }) => newpos(newnodeelm(o)))
+    on('delnode', ({ o }) => o.elm.remove())
+    on('addedge', ({ o }) => newedgeelm(o))
+    on('deledge', ({ o }) => o.elm.remove())
+    on('namenode', ({ o }) => namenodeelm(o))
+    on('nameedge', ({ o }) => nameedgeelm(o))
+    on('clear', () => sep.innerHTML = sen.innerHTML = '')
+    on('addtonode', ({ o }) => {
+      const p = o.from[Object.keys(o.from)[0]]
+      o.data.pos.x = p.data.pos.y + target_length * 0.3
+      o.data.pos.y = p.data.pos.y + rd()
+    })
+
+    $.pending = []
+    $.makepending = f => (...a) => pending.push([f, a])
+    $.namenodeelm = makepending((n, t = n.elm.text) => (
+      t.textContent = n.name, t.setAttribute('transform',
+        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)))
+    $.nameedgeelm = c => c.elm.text.textContent = c.name
 
     $.rd = genrd(795304884).rd
-    $.newpos = (n, d = n.data) => {
-      d.pos = { x: rd(-1, 1) * target_length, y: rd(-1, 1) * target_length }
-      d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
+    $.newpos = (n, x = rd(-1, 1) * target_length,
+      y = rd(-1, 1) * target_length) => {
+      if (!n.data) { n.data = {} } const d = n.data
+      d.pos = { x, y }, d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
       d.mat = 1, d.ecc = 1; return n
     }
     const { sqrt, max, min, sign, abs } = Math
@@ -349,8 +361,7 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
         ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
         bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
       }
-      const gravity = newpos({ data: {} }); total_speed = 0
-      gravity.data.pos.x = gravity.data.pos.y = 0
+      const gravity = newpos({ data: {} }, 0, 0); total_speed = 0
       let tl = target_length, ts = target_speed, dt = 0.05
       let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
       for (let i = 0, l = ns.length; i < l; i++) {
@@ -405,14 +416,17 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
     $.stop = false, $.layouttime = 0, $.multirun = 4
     $.total_speed = 0, $.total_accelaration = 0
     $.frame = () => {
-      const ns = [], es = [], _g = g.g; for (const k in _g) {
-        const n = _g[k]; if (!n.data) { n.data = {} } const d = n.data
-        if (!d.pos) { newpos(n) } ns.push(n); const e = []
+      const ns = [], es = []; for (const k in g) {
+        const n = g[k]; ns.push(n); const e = []
         for (const id in n.to) { e.push(n, n.to[id].o) } es.push(e)
       } if (!stop) {
         for (let i = 0; i < multirun; i++) { layout(ns) }
         if (total_speed === 0) { emit('layoutend', layouttime), stop = true }
       } draw(ns)
+
+      for (const [f, a] of pending) {
+        f(...a)
+      } pending = []
     }
     $.reset = () => { stop = false, layouttime = 0 }
     $.camera = { x: 0, y: 0, s: 1 }
@@ -423,12 +437,10 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
       y = (y - sorigin.y) / camera.s - (c.y + h / 2)
       return { x, y }
     }
-    const sty = dom('style'); sty.innerHTML = `svg circle:hover { fill: red; }`
-    // + `svg text { fill: white; stoke: black; stroke-width: 0.2px; font-size: 10px; }`
     $.se = svg('svg'); se.style.display = 'block'
     se.style.userSelect = se.style.touchAction = 'none'
     se.style.height = se.style.width = '100%'
-    $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen, sty)
+    $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen)
     listenpointerdown(se, e => {
       if (e.target !== se) { return }
       const c = { ...camera }, s = screen2svgcoord(c)
@@ -457,7 +469,8 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
     $.circlesize = 7, $.linewidth = 1
     $.newnodeelm = n => {
       const g = svg('g'), c = svg('circle'), t = svg('text')
-      if (n.name) { t.textContent = n.name } g.text = t
+      if (n.name) { t.textContent = n.name }
+      g.text = t, g.path = c
       g.append(c, t), sen.append(g)
       c.setAttribute('r', circlesize + 'px')
       t.setAttribute('fill', 'white')
@@ -470,12 +483,11 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
         if (e.target !== c) { return }
         let moveed = false, m = e => {
           if (e.touches && e.touches.length > 1) { return }
-          moveed = true; c.setAttribute('fill', 'red'); reset()
+          moveed = true; reset()
           const { x, y } = screen2svgcoord()(...geteventlocation(e))
           n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
         }; listenpointermove(m), listenpointerup(() => (
           moveed ? 0 : emit('nodeclick', { o: n }),
-          c.removeAttribute('fill'),
           delete n.data.lock, cancelpointermove(m)))
       }); n.elm = g; return n
     }
@@ -498,44 +510,75 @@ $.graphlayout = ($ = eventnode({ g: graph() })) => {
   } return $
 }
 
-$.giteditor = ($ = {}) => {
+$.giteditor = ($ = { g: graphlayout(), git: git() }) => {
   with ($) {
-    $.git = git(), $.g = graphlayout()
-    $.setprop = (o, k, v) => (o[k] = v, o)
+    $.nodemap = new Map, $.nodemapr = new Map
+    $.setnodemap = (a, b) => (nodemap.set(a, b), nodemapr.set(b, a))
+    $.delnodemap = (a, b = nodemap.get(a)) =>
+      (nodemap.delete(a, b), nodemapr.delete(b, a))
+    $.delnodemapr = (b, a = nodemapr.get(b)) =>
+      (nodemap.delete(a, b), nodemapr.delete(b, a))
+    g.on('delnode', ({ o: { id } }) => delnodemapr(id))
+
     $.newver = (p, o = git.newver(p)) => {
-      const n = p !== undefined ? g.addtonode(p) : g.addnode()
-      n.type = 'version'; return n
+      const n = p !== undefined ? g.addtonode(nodemap.get(p)) : g.addnode()
+      n.setname = o.verid.slice(0, 8)
+      n.open = false; n.type = p !== undefined ? 'version' : 'rootver'
+      setnodemap(o.id, n.id); setnodecolor(n); return o
     }
     $.write = (mode, node, name, extra) => {
       let o; switch (mode) {
         case 'file': o = git.writefile(node, name, extra); break
         case 'dir': o = git.writedir(node, name); break
         case 'link': o = git.writelink(node, name, extra); break
-      } return setprop(g.addnode(o.id), 'type', mode)
+      } return o
     }
     Object.defineProperty($, 'elm', { get: () => g.se })
     $.frame = g.frame
+    $.togglenode = n => {
+      n.open = !n.open
+      if (!n.open) { g.deltree(n.id, 1) }
+      else {
+        const o = git.g[nodemapr.get(n.id)]
+        const c = o.children
+        for (const t in c) {
+          const edge = o.to[c[t]]
+          const e = g.addtonode(n.id, edge.name)
+          e.type = edge.o.type
+          e.setname = edge.name
+          if (e.type === 'link') {
+            e.setname = git.g[edge.o.value].verid.slice(0, 8)
+          }
+          setnodecolor(e)
+          setnodemap(edge.o.id, e.id)
+        } g.reset()
+      }
+    }
+    $.setnodecolor = n => n.elm.path.setAttribute('fill', {
+      rootver: '#0f0',
+      version: 'black', dir: 'yellow', link: 'cyan', file: 'grey',
+    }[n.type])
     g.on('nodeclick', ({ o }) => {
-      log(o)
+      log(!o.open ? 'open' : 'close', o.id, o)
+      togglenode(o)
     })
   } return $
 }
 
-$.gengraph = (l = 100, g = giteditor()) => {
-  const { floor, abs } = Math, ids = []
-  for (let i = 0; i < 5; i++) { ids.push(g.newver().id) }
-  for (let i = 0; i < l; i++) {
-    let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
-    let a = ids[i], s = [...ids]
-    for (let j = 0; j < r && s.length > 0; j++) {
-      const k = s.splice(floor(rd(s.length)), 1)[0]
-      const n = g.newver(k).id
-      ids.push(n), s.push(n)
-    }
-  }
-  return g
-}
+$.ge = giteditor()
+const a = ge.newver().id
+ge.write('file', a, 'a.js', 'twetrwerw')
+ge.write('dir', a, 'b')
+ge.write('link', a, 'c', a)
+const b = ge.newver(a).id
+const c = ge.git.read(b, 'b').id
+ge.write('dir', c, 'd')
+ge.write('file', c, 'e.js', 'dfasdfasd')
 
-$.ge = gengraph()
+log(a, b, c)
+log(ge.git.g)
+log(ge.git.g[b])
+const d = ge.newver(b).id
+
 document.body.append(ge.elm)
 listenframe(() => ge.frame())
