@@ -338,24 +338,22 @@ $.graphlayout = ($ = graph()) => {
     })
 
     $.pending = []; $.makepending = f => (...a) => pending.push([f, a])
-    $.namenodeelm = makepending((n, t = n.elm.text) => (
+    $.namenodeelm = makepending((n, t = n.elm.text, b = t.getBBox()) => (
       t.textContent = n.name, t.setAttribute('transform',
-        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)))
+        `translate(-${b.width / 2}, -${b.height * 0.9})`)))
     $.nameedgeelm = c => c.elm.text.textContent = c.name
     $.newnodeelm = n => {
       setvaluebytime(v => (n.elm.style.opacity = v,
         n.data.ecc = v === 0 ? 0.0001 : v, stop = false))
       const g = svg('g'), c = svg('circle'), t = svg('text')
-      if (n.name) { t.textContent = n.name }
+      namenodeelm(n)
       g.text = t, g.path = c
       g.append(c, t), sen.append(g)
       c.setAttribute('r', circlesize + 'px')
       t.setAttribute('fill', 'white')
       t.setAttribute('stroke', 'black')
-      t.setAttribute('stroke-width', '0.2px')
-      t.setAttribute('font-size', '5px')
-      t.setAttribute('transform',
-        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)
+      t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
+      t.setAttribute('font-size', circlesize + 'px')
       listenpointerdown(c, e => {
         if (e.target !== c) { return }
         let moveed = false, m = e => {
@@ -374,8 +372,8 @@ $.graphlayout = ($ = graph()) => {
       const c = o, n = c.name
       t.setAttribute('fill', 'black')
       t.setAttribute('stroke', 'white')
-      t.setAttribute('stroke-width', '0.2px')
-      t.setAttribute('font-size', '5px')
+      t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
+      t.setAttribute('font-size', circlesize + 'px')
       if (n) { t.textContent = n }
       c.elm = g, g.path = p; g.text = t
       g.append(p, t), sep.append(g)
@@ -412,7 +410,7 @@ $.graphlayout = ($ = graph()) => {
         ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
         bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
       }; total_speed = 0
-      let tl = target_length, ts = target_speed, dt = 0.05
+      let tl = target_length, ts = target_length * 2, dt = 0.05
       let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
       for (let i = 0, l = ns.length; i < l; i++) {
         const a = ns[i], ad = a.data, ap = ad.pos
@@ -429,11 +427,13 @@ $.graphlayout = ($ = graph()) => {
         ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
       } layouttime += time.realdelta
     }
-    $.target_length = 125, $.target_speed = 250, $.friction = 0.01
+    $.circlesize = 50, $.linewidth = circlesize / 7
+    $.target_length = circlesize * 10, $.friction = 0.01
     $.draw = ns => {
       const w = se.clientWidth, h = se.clientHeight
       const x = w / 2 + camera.x, y = h / 2 + camera.y
-      const transtr = `translate(${sorigin.x}, ${sorigin.y}) scale(${camera.s}) translate(${x}, ${y})`
+      const transtr = `translate(${sorigin.x}, ${sorigin.y}) ` +
+        `scale(${camera.s}) translate(${x}, ${y})`
       sep.setAttribute('transform', transtr)
       sep.setAttribute('fill', 'none')
       sep.setAttribute('stroke', 'black')
@@ -444,7 +444,7 @@ $.graphlayout = ($ = graph()) => {
         const { x, y } = n.data.pos, e = n.elm
         e.setAttribute('transform', `translate(${x}, ${y})`)
         for (const k in n.to) {
-          const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = 2
+          const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = circlesize / 7 * 2
           if (b.o === n) {
             const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
             e.path.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
@@ -484,6 +484,7 @@ $.graphlayout = ($ = graph()) => {
       return { x, y }
     }
     $.se = svg('svg'); se.style.display = 'block'
+    se.style.filter = 'drop-shadow(#777 0px 4px 6px)'
     se.style.userSelect = se.style.touchAction = 'none'
     se.style.height = se.style.width = '100%'
     $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen)
@@ -512,7 +513,6 @@ $.graphlayout = ($ = graph()) => {
       camera.s = s * f, f = camera.s / s,
       sorigin.x = x - (x - sorigin.x) * f,
       sorigin.y = y - (y - sorigin.y) * f)
-    $.circlesize = 7, $.linewidth = 1
     $.geteventlocation = (e, ef = e.touches) => {
       const { left: l, top: t } = se.getBoundingClientRect()
       return ef && ef.length == 1 ?
@@ -566,7 +566,10 @@ $.giteditor = ($ = { g: graphlayout(), git: git() }) => {
     }
     $.setnodecolor = n => n.elm.path.setAttribute('fill', {
       rootver: '#0f0',
-      version: 'black', dir: 'yellow', link: 'cyan', file: 'grey',
+      version: 'black',
+      dir: 'yellow',
+      link: 'cyan',
+      file: 'grey',
     }[n.type])
     g.on('nodeclick', ({ o }) => {
       // log(!o.open ? 'open' : 'close', o.id, o)
