@@ -85,14 +85,21 @@
 } { // time & frame -----------------------------------------------------------
   $.time = { current: 0, delta: 0, maxdelta: 1 / 60 }
   time.now = () => performance.now() / 1000
+  $.listenpreframe = f => pfs.add(f)
+  $.cancelpreframe = f => pfs.delete(f)
   $.listenframe = f => fs.add(f)
   $.cancelframe = f => fs.delete(f)
-  let fs = new Set, frame = t => {
+  let fs = new Set, pfs = new Set, frame = t => {
     let pt = time.current, ct = time.current = t / 1000
-    time.delta = Math.min(ct - pt, time.maxdelta)
-    requestAnimationFrame(frame)
-    for (const f of fs) { f() }
+    time.delta = ct - pt; requestAnimationFrame(frame)
+    for (const f of pfs) { f() } for (const f of fs) { f() }
   }; requestAnimationFrame(frame)
+  $.setvaluebytime = (f, e, l = 0.5) => {
+    let t = 0, s = () => {
+      let v = t / l; f(v); t += time.delta
+      if (t > l) { if (e) { e() } cancelpreframe(s) }
+    }; listenpreframe(s)
+  }
 } { // global pointer event ---------------------------------------------------
   let fs = [], mfs = new Set
   let u = e => { for (const f of fs) { f(e) } fs = [] }
@@ -203,11 +210,12 @@
 
 $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
   with ($) {
+    const nsym = Symbol('name')
     $.addnode = (id = i++) => {
       const o = { id, to: {}, from: {}, nto: 0, nfrom: 0, children: {} }
-      Reflect.defineProperty(o, 'setname',
-        { set: v => (o.name = v, emit('namenode', { o })) })
-      g[id] = o; emit('addnode', { id, o }); return o
+      Reflect.defineProperty(o, 'name', {
+        get: () => o[nsym], set: v => (o[nsym] = v, emit('namenode', { o }))
+      }); g[id] = o; emit('addnode', { id, o }); return o
     }
     $.delnode = (id, n = g[id]) => {
       for (const k in n.to) { deledge(id, k) }
@@ -317,24 +325,66 @@ $.git = ($ = graph()) => {
 $.graphlayout = ($ = graph()) => {
   with ($) {
     on('addnode', ({ o }) => newpos(newnodeelm(o)))
-    on('delnode', ({ o }) => o.elm.remove())
+    on('delnode', ({ o }) => delnodeelm(o))
     on('addedge', ({ o }) => newedgeelm(o))
-    on('deledge', ({ o }) => o.elm.remove())
+    on('deledge', ({ o }) => deledgeelm(o))
     on('namenode', ({ o }) => namenodeelm(o))
     on('nameedge', ({ o }) => nameedgeelm(o))
     on('clear', () => sep.innerHTML = sen.innerHTML = '')
     on('addtonode', ({ o }) => {
       const p = o.from[Object.keys(o.from)[0]]
-      o.data.pos.x = p.data.pos.y + target_length * 0.3
-      o.data.pos.y = p.data.pos.y + rd()
+      o.data.pos.x = p.data.pos.y + rd(-1, 1) * target_length * 0.1
+      o.data.pos.y = p.data.pos.y + rd(-1, 1) * target_length * 0.1
     })
 
-    $.pending = []
-    $.makepending = f => (...a) => pending.push([f, a])
+    $.pending = []; $.makepending = f => (...a) => pending.push([f, a])
     $.namenodeelm = makepending((n, t = n.elm.text) => (
       t.textContent = n.name, t.setAttribute('transform',
         `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)))
     $.nameedgeelm = c => c.elm.text.textContent = c.name
+    $.newnodeelm = n => {
+      setvaluebytime(v => (n.elm.style.opacity = v,
+        n.data.ecc = v === 0 ? 0.0001 : v, stop = false))
+      const g = svg('g'), c = svg('circle'), t = svg('text')
+      if (n.name) { t.textContent = n.name }
+      g.text = t, g.path = c
+      g.append(c, t), sen.append(g)
+      c.setAttribute('r', circlesize + 'px')
+      t.setAttribute('fill', 'white')
+      t.setAttribute('stroke', 'black')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      t.setAttribute('transform',
+        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)
+      listenpointerdown(c, e => {
+        if (e.target !== c) { return }
+        let moveed = false, m = e => {
+          if (e.touches && e.touches.length > 1) { return }
+          moveed = true; reset()
+          const { x, y } = screen2svgcoord()(...geteventlocation(e))
+          n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+        }; listenpointermove(m), listenpointerup(() => (
+          moveed ? 0 : emit('nodeclick', { o: n }),
+          delete n.data.lock, cancelpointermove(m)))
+      }); n.elm = g; return n
+    }
+    $.newedgeelm = o => {
+      setvaluebytime(v => (o.elm.style.opacity = v, stop = false))
+      const g = svg('g'), p = svg('path'), t = svg('text')
+      const c = o, n = c.name
+      t.setAttribute('fill', 'black')
+      t.setAttribute('stroke', 'white')
+      t.setAttribute('stroke-width', '0.2px')
+      t.setAttribute('font-size', '5px')
+      if (n) { t.textContent = n }
+      c.elm = g, g.path = p; g.text = t
+      g.append(p, t), sep.append(g)
+    }
+    $.delnodeelm = n => setvaluebytime(v => (
+      v = 1 - v, n.elm.style.opacity = v, stop = false,
+      n.data.ecc = v), () => n.elm.remove())
+    $.deledgeelm = n => setvaluebytime(v => (v = 1 - v,
+      n.elm.style.opacity = v, stop = false), () => n.elm.remove())
 
     $.rd = genrd(795304884).rd
     $.newpos = (n, x = rd(-1, 1) * target_length,
@@ -357,6 +407,7 @@ $.graphlayout = ($ = graph()) => {
       const distance = (b, p, ad, ap) => {
         const bd = b.data, bp = bd.pos
         const pdx = bp.x - ap.x, pdy = bp.y - ap.y
+        p *= ad.ecc * bd.ecc
         const fx = p * pdx, fy = p * pdy
         ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
         bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
@@ -422,11 +473,7 @@ $.graphlayout = ($ = graph()) => {
       } if (!stop) {
         for (let i = 0; i < multirun; i++) { layout(ns) }
         if (total_speed === 0) { emit('layoutend', layouttime), stop = true }
-      } draw(ns)
-
-      for (const [f, a] of pending) {
-        f(...a)
-      } pending = []
+      } draw(ns); for (const [f, a] of pending) { f(...a) } pending = []
     }
     $.reset = () => { stop = false, layouttime = 0 }
     $.camera = { x: 0, y: 0, s: 1 }
@@ -467,41 +514,6 @@ $.graphlayout = ($ = graph()) => {
       sorigin.x = x - (x - sorigin.x) * f,
       sorigin.y = y - (y - sorigin.y) * f)
     $.circlesize = 7, $.linewidth = 1
-    $.newnodeelm = n => {
-      const g = svg('g'), c = svg('circle'), t = svg('text')
-      if (n.name) { t.textContent = n.name }
-      g.text = t, g.path = c
-      g.append(c, t), sen.append(g)
-      c.setAttribute('r', circlesize + 'px')
-      t.setAttribute('fill', 'white')
-      t.setAttribute('stroke', 'black')
-      t.setAttribute('stroke-width', '0.2px')
-      t.setAttribute('font-size', '5px')
-      t.setAttribute('transform',
-        `translate(-${t.getBBox().width / 2}, -${circlesize + 1})`)
-      listenpointerdown(c, e => {
-        if (e.target !== c) { return }
-        let moveed = false, m = e => {
-          if (e.touches && e.touches.length > 1) { return }
-          moveed = true; reset()
-          const { x, y } = screen2svgcoord()(...geteventlocation(e))
-          n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
-        }; listenpointermove(m), listenpointerup(() => (
-          moveed ? 0 : emit('nodeclick', { o: n }),
-          delete n.data.lock, cancelpointermove(m)))
-      }); n.elm = g; return n
-    }
-    $.newedgeelm = o => {
-      const g = svg('g'), p = svg('path'), t = svg('text')
-      const c = o, n = c.name
-      t.setAttribute('fill', 'black')
-      t.setAttribute('stroke', 'white')
-      t.setAttribute('stroke-width', '0.2px')
-      t.setAttribute('font-size', '5px')
-      if (n) { t.textContent = n }
-      c.elm = g, g.path = p; g.text = t
-      g.append(p, t), sep.append(g)
-    }
     $.geteventlocation = (e, ef = e.touches) => {
       const { left: l, top: t } = se.getBoundingClientRect()
       return ef && ef.length == 1 ?
@@ -522,7 +534,7 @@ $.giteditor = ($ = { g: graphlayout(), git: git() }) => {
 
     $.newver = (p, o = git.newver(p)) => {
       const n = p !== undefined ? g.addtonode(nodemap.get(p)) : g.addnode()
-      n.setname = o.verid.slice(0, 8)
+      n.name = o.verid.slice(0, 8)
       n.open = false; n.type = p !== undefined ? 'version' : 'rootver'
       setnodemap(o.id, n.id); setnodecolor(n); return o
     }
@@ -545,10 +557,9 @@ $.giteditor = ($ = { g: graphlayout(), git: git() }) => {
           const edge = o.to[c[t]]
           const e = g.addtonode(n.id, edge.name)
           e.type = edge.o.type
-          e.setname = edge.name
           if (e.type === 'link') {
-            e.setname = git.g[edge.o.value].verid.slice(0, 8)
-          }
+            e.name = edge.name + ' | ' + git.g[edge.o.value].verid.slice(0, 8)
+          } else { e.name = edge.name }
           setnodecolor(e)
           setnodemap(edge.o.id, e.id)
         } g.reset()
@@ -559,7 +570,7 @@ $.giteditor = ($ = { g: graphlayout(), git: git() }) => {
       version: 'black', dir: 'yellow', link: 'cyan', file: 'grey',
     }[n.type])
     g.on('nodeclick', ({ o }) => {
-      log(!o.open ? 'open' : 'close', o.id, o)
+      // log(!o.open ? 'open' : 'close', o.id, o)
       togglenode(o)
     })
   } return $
@@ -574,11 +585,8 @@ const b = ge.newver(a).id
 const c = ge.git.read(b, 'b').id
 ge.write('dir', c, 'd')
 ge.write('file', c, 'e.js', 'dfasdfasd')
-
-log(a, b, c)
-log(ge.git.g)
-log(ge.git.g[b])
 const d = ge.newver(b).id
+const e = ge.newver(b).id
 
 document.body.append(ge.elm)
 listenframe(() => ge.frame())
