@@ -1,6 +1,7 @@
 - [x] hash file
 - [x] diff
 - [ ] merge
+  - [ ] least common sequence
 - [ ] text editor tab
 - [x] version graph and file explorer
 - [x] fade in/out animation for graph node

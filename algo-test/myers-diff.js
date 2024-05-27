@@ -20,17 +20,22 @@ const diff = (e, f, i = 0, j = 0) => {
           let b = a - k, s = a, t = b, z = w - k
           while (a < N && b < M && e[o1 * N + m * a - o1] === f[o1 * M + m * b - o1]
           ) { a += 1, b += 1 } c[k % Z] = a
-          log(h, !r, objarr(c).join('|'))
+          // log(h, !r, objarr(c).join('|'))
           if (L % 2 === o && z >= o - h && z <= h - o && c[k % Z] + d[z % Z] >= N) {
             let [D, x, y, u, v] = o === 1 ? [2 * h - 1, s, t, a, b] : [2 * h, N - a, M - b, N - s, M - t], R
-            log('jump')
             if (D > 1 || x !== u && y !== v) {
-              R = diff(e.slice(0, x), f.slice(0, y), i, j)
-                .concat(diff(e.slice(u), f.slice(v), i + u, j + v))
+              const a = diff(e.slice(0, x), f.slice(0, y), i, j)
+              const b = diff(e.slice(u), f.slice(v), i + u, j + v)
+              const al = a[a.length - 1], bf = b.shift(), t = al.type
+              if (t === bf.type && (
+                (t === 'insert' && al.old === bf.old) ||
+                // (t === 'insert' && al.old === bf.old && al.new + al.length === bf.new) ||
+                (t === 'delete' && al.old + al.length === bf.old))) {
+                al.length += bf.length, R = a.concat(b)
+              } else { R = a.concat(bf, b) }
             } else if (M > N) { R = diff([], f.slice(N), i + N, j + N) }
             else if (M < N) { R = diff(e.slice(M), [], i + M, j + M) }
             else { R = [] }
-            log('jump back', ...R)
             return R
           }
         }
@@ -41,4 +46,6 @@ const diff = (e, f, i = 0, j = 0) => {
   else { throw new Error('can\'t diff') }
 }
 
-diff('abc'.split(''), 'bcfffffffffffffffffffffff'.split(''))
+log(...diff('abc'.split(''), 'bcfffffffffffffffffffffff'.split('')))
+log(...diff('bcfffffffffffffffffffffff'.split(''), 'abc'.split('')))
+log(...diff('samepart/abcde'.split(''), 'samepart/adcde'.split('')))
