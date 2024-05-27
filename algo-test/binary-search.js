@@ -1,14 +1,14 @@
 const { floor } = Math
 $.bsearch = (a, cmp, l = 0, r = a.length - 1, m, c) => {
   while (l <= r) {
-    m = floor((l + r) / 2), c = cmp(a[m], m); if (c > 0
+    m = (l + r) >>> 1, c = cmp(a[m], m); if (c > 0
     ) { r = m - 1 } else if (c < 0) { l = m + 1 } else { return m }
   } return -1
 }, $.bsleft = (a, c, l = 0, r = a.length, m) => {
-  while (l < r) (m = floor((l + r) / 2),
+  while (l < r) (m = (l + r) >>> 1,
     c(a[m], m) < 0 ? l = m + 1 : r = m); return l
 }, $.bsright = (a, c, l = 0, r = a.length, m) => {
-  while (l < r) (m = floor((l + r) / 2),
+  while (l < r) (m = (l + r) >>> 1,
     c(a[m], m) > 0 ? r = m : l = m + 1); return r - 1
 }
 // $.bsearch = bsright
