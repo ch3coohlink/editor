@@ -240,16 +240,18 @@ $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
       delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
     $.renameedge = (a, n, nn, b = g[a].children[n]) => (delete g[a].children[n],
       g[a].children[nn] = b, g[a].to[b].name = nn, emit('nameedge', { o: g[a].to[b] }))
-    $.deltree = (n, l = 0) => {
-      const c = g[n].children
+    $.deltree = (n, l = 0, c = g[n].children) => {
       for (const k in c) { deltree(c[k], l - 1) }
       if (l <= 0) { delnode(n) }
     }
-    $.addtonode = (a, name, id) => {
+    $.addtonode = (a, name, id, force = false) => {
       if (!g[a]) { throw `non exist node: ${a}` }
-      const b = addnode(id); addedge(a, b.id, name)
-      emit('addtonode', { o: b })
-      return b
+      const pb = g[a].children[name]
+      if (name !== undefined && pb !== undefined) {
+        if (force) { delnode(pb) }
+        else { throw `edge existed: ${a}:${name}` }
+      } const b = addnode(id); addedge(a, b.id, name)
+      emit('addtonode', { o: b }); return b
     }
     $.clear = () => (g = {}, emit('clear'))
   } return $
@@ -282,17 +284,17 @@ $.git = ($ = graph()) => {
     $.addhashobj = (h, t) => {
       const o = addnode(h); o.type = 'hashobj', o.value = t
     }
-    $.writefile = (loc, name, text, h = hexenc(sha256(text))) => {
-      const b = addtonode(loc, name)
+    $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
+      const b = addtonode(loc, name, _, force)
       if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
       b.type = 'file', b.value = h; return b
     }
-    $.writedir = (loc, name) => {
-      const b = addtonode(loc, name)
+    $.writedir = (loc, name, force) => {
+      const b = addtonode(loc, name, _, force)
       b.type = 'dir'; return b
     }
-    $.writelink = (loc, name, ref) => {
-      const b = addtonode(loc, name)
+    $.writelink = (loc, name, ref, force) => {
+      const b = addtonode(loc, name, _, force)
       b.type = 'link', b.value = ref; return b
     }
     const copytree = (a, b) => {
@@ -357,11 +359,13 @@ $.graphlayout = ($ = graph()) => {
       t.setAttribute('font-size', circlesize + 'px')
       listenpointerdown(c, e => {
         if (e.target !== c) { return }
+        let sp = geteventlocation(e) // start position
         let moveed = false, m = e => {
-          if (e.touches && e.touches.length > 1) { return }
-          moveed = true; reset()
-          const { x, y } = screen2svgcoord()(...geteventlocation(e))
+          if (e.touches && e.touches.length > 1) { return } reset()
+          const cp = geteventlocation(e)
+          const { x, y } = screen2svgcoord()(...cp)
           n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+          moveed = (cp[0] - sp[0]) ** 2 + (cp[1] - sp[1]) ** 2 > 100
         }; listenpointermove(m), listenpointerup(() => (
           moveed ? 0 : emit('nodeclick', { o: n }),
           delete n.data.lock, cancelpointermove(m)))
@@ -535,11 +539,14 @@ $.giteditor = ($ = git()) => {
   with ($) {
     $.vg = graphlayout(), $.nodemap = bimap()
     vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
-    vg.on('nodeclick', ({ o }) => togglenode(o))
+    vg.on('nodeclick', ({ o }) => {
+      if (o.type === 'file') { log(g[g[nodemap.getr(o.id)].value].value) }
+      togglenode(o)
+    })
     on('newver', ({ p, pb, o }) => {
-      const n = p !== undefined ? vg.addtonode(nodemap.get(p)) : vg.addnode()
+      const n = pb ? vg.addtonode(nodemap.get(p)) : vg.addnode()
       n.name = o.verid.slice(0, 8)
-      n.open = false; n.type = p !== undefined ? 'version' : 'rootver'
+      n.open = false; n.type = pb ? 'version' : 'rootver'
       nodemap.set(o.id, n.id); setnodecolor(n)
     }); $.frame = vg.frame
     $.togglenodegit = id => togglenode(vg.g[nodemap.get(id)])
@@ -556,8 +563,8 @@ $.giteditor = ($ = git()) => {
           if (e.type === 'link') {
             e.name = edge.name + ' | ' + g[edge.o.value].verid.slice(0, 8)
           } else { e.name = edge.name }
-          setnodecolor(e)
           nodemap.set(edge.o.id, e.id)
+          setnodecolor(e)
         } vg.reset()
       }
     }
@@ -579,11 +586,13 @@ const c = ge.read(b, 'b').id
 ge.writedir(c, 'd')
 ge.writefile(c, 'e.js', 'dfasdfasd')
 const d = ge.newver(b).id
+ge.writefile(d, 'a.js', 'twetrwerw34345354', true)
 const e = ge.newver(b).id
 const f = ge.newver(e).id
+// ge.togglenodegit(b)
+// ge.togglenodegit(c)
 
 document.body.append(ge.elm)
 listenframe(() => ge.frame())
 
-ge.togglenodegit(b)
-ge.togglenodegit(c)
+log(ge.g)

@@ -14,3 +14,6 @@
 - [ ] folder open/close identifier
 - [x] lock previous version
 - [ ] prevent wirte for locked version
+- [x] dealing with overlap write
+- [x] better node click detection (allow small dragging amount)
+- [ ] git editor ui
