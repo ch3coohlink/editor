@@ -3,9 +3,14 @@
 - [ ] merge
 - [ ] text editor tab
 - [x] version graph and file explorer
-- [x] fade in out animation for graph node
+- [x] fade in/out animation for graph node
+- [x] fade in/out physics
 - [ ] record open state in git graph
 - [ ] serialization
 - [ ] save file to disk
-- [ ] reformat giteditor to extend git
+- [x] reformat giteditor to extend git object
 - [ ] soft link in graph layout
+- [x] color pallette
+- [ ] folder open/close identifier
+- [x] lock previous version
+- [ ] prevent wirte for locked version

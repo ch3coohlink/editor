@@ -311,10 +311,11 @@ $.git = ($ = graph()) => {
         }
       }
     }
-    $.newver = prev => {
-      if (prev !== undefined) { o = addtonode(prev) }
-      else { o = addnode() } o.type = 'version', o.verid = uuid()
-      if (prev !== undefined) { copytree(prev, o.id) } return o
+    $.newver = (prev, b = prev !== undefined) => {
+      if (b) { o = addtonode(prev) } else { o = addnode() }
+      o.type = 'version', o.verid = uuid()
+      if (b) { copytree(prev, o.id), g[prev].lock = true }
+      emit('newver', { p: prev, pb: b, o }); return o
     }
     $.merge = (a, b) => { }
     $.writedes = (ver, text) => { g[ver].description = text }
@@ -351,7 +352,7 @@ $.graphlayout = ($ = graph()) => {
       g.append(c, t), sen.append(g)
       c.setAttribute('r', circlesize + 'px')
       t.setAttribute('fill', 'white')
-      t.setAttribute('stroke', 'black')
+      t.setAttribute('stroke', forecolor)
       t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
       t.setAttribute('font-size', circlesize + 'px')
       listenpointerdown(c, e => {
@@ -370,7 +371,7 @@ $.graphlayout = ($ = graph()) => {
       setvaluebytime(v => (o.elm.style.opacity = v, stop = false))
       const g = svg('g'), p = svg('path'), t = svg('text')
       const c = o, n = c.name
-      t.setAttribute('fill', 'black')
+      t.setAttribute('fill', forecolor)
       t.setAttribute('stroke', 'white')
       t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
       t.setAttribute('font-size', circlesize + 'px')
@@ -427,8 +428,9 @@ $.graphlayout = ($ = graph()) => {
         ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
       } layouttime += time.realdelta
     }
-    $.circlesize = 50, $.linewidth = circlesize / 7
+    $.circlesize = 15, $.linewidth = circlesize / 7
     $.target_length = circlesize * 10, $.friction = 0.01
+    $.forecolor = '#444'
     $.draw = ns => {
       const w = se.clientWidth, h = se.clientHeight
       const x = w / 2 + camera.x, y = h / 2 + camera.y
@@ -436,7 +438,7 @@ $.graphlayout = ($ = graph()) => {
         `scale(${camera.s}) translate(${x}, ${y})`
       sep.setAttribute('transform', transtr)
       sep.setAttribute('fill', 'none')
-      sep.setAttribute('stroke', 'black')
+      sep.setAttribute('stroke', forecolor)
       sep.setAttribute('stroke-width', linewidth + 'px')
       sep.setAttribute('stroke-linecap', 'round')
       sen.setAttribute('transform', transtr)
@@ -521,74 +523,67 @@ $.graphlayout = ($ = graph()) => {
   } return $
 }
 
-$.giteditor = ($ = { g: graphlayout(), git: git() }) => {
+$.bimap = ($ = { am: new Map, bm: new Map }) => {
   with ($) {
-    $.nodemap = new Map, $.nodemapr = new Map
-    $.setnodemap = (a, b) => (nodemap.set(a, b), nodemapr.set(b, a))
-    $.delnodemap = (a, b = nodemap.get(a)) =>
-      (nodemap.delete(a, b), nodemapr.delete(b, a))
-    $.delnodemapr = (b, a = nodemapr.get(b)) =>
-      (nodemap.delete(a, b), nodemapr.delete(b, a))
-    g.on('delnode', ({ o: { id } }) => delnodemapr(id))
+    $.set = (a, b) => (am.set(a, b), bm.set(b, a))
+    $.get = a => am.get(a), $.getr = b => bm.get(b)
+    $.del = a => am.delete(a), $.delr = b => bm.delete(b)
+  } return $
+}
 
-    $.newver = (p, o = git.newver(p)) => {
-      const n = p !== undefined ? g.addtonode(nodemap.get(p)) : g.addnode()
+$.giteditor = ($ = git()) => {
+  with ($) {
+    $.vg = graphlayout(), $.nodemap = bimap()
+    vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
+    vg.on('nodeclick', ({ o }) => togglenode(o))
+    on('newver', ({ p, pb, o }) => {
+      const n = p !== undefined ? vg.addtonode(nodemap.get(p)) : vg.addnode()
       n.name = o.verid.slice(0, 8)
       n.open = false; n.type = p !== undefined ? 'version' : 'rootver'
-      setnodemap(o.id, n.id); setnodecolor(n); return o
-    }
-    $.write = (mode, node, name, extra) => {
-      let o; switch (mode) {
-        case 'file': o = git.writefile(node, name, extra); break
-        case 'dir': o = git.writedir(node, name); break
-        case 'link': o = git.writelink(node, name, extra); break
-      } return o
-    }
-    Object.defineProperty($, 'elm', { get: () => g.se })
-    $.frame = g.frame
+      nodemap.set(o.id, n.id); setnodecolor(n)
+    }); $.frame = vg.frame
+    $.togglenodegit = id => togglenode(vg.g[nodemap.get(id)])
     $.togglenode = n => {
       n.open = !n.open
-      if (!n.open) { g.deltree(n.id, 1) }
+      if (!n.open) { vg.deltree(n.id, 1) }
       else {
-        const o = git.g[nodemapr.get(n.id)]
+        const o = g[nodemap.getr(n.id)]
         const c = o.children
         for (const t in c) {
           const edge = o.to[c[t]]
-          const e = g.addtonode(n.id, edge.name)
+          const e = vg.addtonode(n.id, edge.name)
           e.type = edge.o.type
           if (e.type === 'link') {
-            e.name = edge.name + ' | ' + git.g[edge.o.value].verid.slice(0, 8)
+            e.name = edge.name + ' | ' + g[edge.o.value].verid.slice(0, 8)
           } else { e.name = edge.name }
           setnodecolor(e)
-          setnodemap(edge.o.id, e.id)
-        } g.reset()
+          nodemap.set(edge.o.id, e.id)
+        } vg.reset()
       }
     }
     $.setnodecolor = n => n.elm.path.setAttribute('fill', {
-      rootver: '#0f0',
-      version: 'black',
-      dir: 'yellow',
-      link: 'cyan',
-      file: 'grey',
+      rootver: '#f47771', version: '#83c1bc',
+      dir: '#fbc85f', link: '#8e4483', file: '#2b5968',
     }[n.type])
-    g.on('nodeclick', ({ o }) => {
-      // log(!o.open ? 'open' : 'close', o.id, o)
-      togglenode(o)
-    })
+    Object.defineProperty($, 'elm', { get: () => vg.se })
   } return $
 }
 
 $.ge = giteditor()
 const a = ge.newver().id
-ge.write('file', a, 'a.js', 'twetrwerw')
-ge.write('dir', a, 'b')
-ge.write('link', a, 'c', a)
+ge.writefile(a, 'a.js', 'twetrwerw')
+ge.writedir(a, 'b')
+ge.writelink(a, 'c', a)
 const b = ge.newver(a).id
-const c = ge.git.read(b, 'b').id
-ge.write('dir', c, 'd')
-ge.write('file', c, 'e.js', 'dfasdfasd')
+const c = ge.read(b, 'b').id
+ge.writedir(c, 'd')
+ge.writefile(c, 'e.js', 'dfasdfasd')
 const d = ge.newver(b).id
 const e = ge.newver(b).id
+const f = ge.newver(e).id
 
 document.body.append(ge.elm)
 listenframe(() => ge.frame())
+
+ge.togglenodegit(b)
+ge.togglenodegit(c)
