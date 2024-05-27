@@ -210,8 +210,8 @@ function diff3MergeRegions(a, o, b) {
   diffIndices(o, a).forEach(item => addHunk(item, 'a'));
   diffIndices(o, b).forEach(item => addHunk(item, 'b'));
 
-  log('hs', ...hunks)
   hunks.sort((x, y) => x.oStart - y.oStart);
+  log('hs', ...hunks)
 
   let results = [];
   let currOffset = 0;
@@ -277,6 +277,7 @@ function diff3MergeRegions(a, o, b) {
       const aEnd = bounds.a[1] + (regionEnd - bounds.a[3]);
       const bStart = bounds.b[0] + (regionStart - bounds.b[2]);
       const bEnd = bounds.b[1] + (regionEnd - bounds.b[3]);
+      log(regionStart, regionEnd, aStart, aEnd, bStart, bEnd, bounds.a, bounds.b)
       results.push({
         stable: false, aStart: aStart, aLength: aEnd - aStart,
         aContent: a.slice(aStart, aEnd),

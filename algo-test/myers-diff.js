@@ -32,12 +32,18 @@ const diff = (e, f, i = 0, j = 0) => {
               // log('tail')
               const b = diff(e.slice(u), f.slice(v), i + u, j + v)
               // log('back', ...a, '|', ...b)
-              let al = a[a.length - 1], bf = b[0]
-              if (al && bf && (
-                (al.n + al.l === bf.n) ||
-                (al.o + al.l === bf.o))) {
-                al.l += bf.l, R = a.concat(b.slice(1))
-              } else { R = a.concat(b) }
+              let ao = a[a.length - 1], bo = b[0]
+              log('combine', ao?.t, bo?.t, ao, bo,)
+              if (!(ao && bo)) { log('not combine'); return a.concat(b) }
+              if (ao.al !== 0 && ao.as + ao.al === bo.as) {
+                log('a combine')
+                ao.al += bo.al, ao.bl += bo.bl
+              } else if (ao.bl !== 0 && ao.bs + ao.bl === bo.bs) {
+                log('b combine')
+                ao.al += bo.al, ao.bl += bo.bl
+              } else { log('not combine'); return a.concat(b) }
+              log(ao.t, bo.t, ao)
+              return a.concat(b.slice(1))
             } else if (M > N) {
               // log('m > n')
               R = diff([], f.slice(N), i + N, j + N)
@@ -51,32 +57,34 @@ const diff = (e, f, i = 0, j = 0) => {
     }
   } else if (N > 0) {
     // log('n > 0')
-    return [{ as: i, al: N, bs: j, bl: 0 }]
+    return [{ as: i, al: N, bs: j, bl: 0, t: 'delete' }]
   } else if (M > 0) {
     // log('m > 0')
-    return [{ as: i, al: 0, bs: j, bl: M }]
+    return [{ as: i, al: 0, bs: j, bl: M, t: 'insert' }]
   } else { return [] }
 }
 
-log(...diff('abc'.split(''), 'bcfffffffffffffffffffffff'.split('')))
-log('-'.repeat(80))
-log(...diff('bcfffffffffffffffffffffff'.split(''), 'abc'.split('')))
-log('-'.repeat(80))
-log(...diff('samepart/abcde'.split(''), 'samepart/adcde'.split('')))
+// log(...diff('abc'.split(''), 'bcfffffffffffffffffffffff'.split('')))
+// log('-'.repeat(80))
+// log(...diff('bcfffffffffffffffffffffff'.split(''), 'abc'.split('')))
+// log('-'.repeat(80))
+log(...diff('s________amepart/abcde'.split(''), 'samedisk/ffffffffadcde'.split('')))
 log('-'.repeat(80))
 
-const stb = (buffer, s, l, v) => ({ stable: true, buffer, s, l, v })
-const ust = (os, ol, ov, as, al, av, bs, bl, bv) => (
-  { stable: false, os, ol, ov, as, al, av, bs, bl, bv })
-const diff2hunk = (ab, a, hs) => a.forEach(({ t, o, n, l }) => hs.push(t === 'insert' ?
-  // { ab, os: o, ol: 0, abs: n, abl: l } : { ab, os: o, ol: l, abs: o, abl: 0 }))
-  { ab, os: o, ol: 0, abs: n, abl: l } : { ab, os: o, ol: l, abs: n, abl: 0 }))
+const stb = (b, s, l, v) => ({ stable: true, buffer: b, s, l, v })
+const ust = (os, ol, ov, as, al, av, bs, bl, bv) =>
+  ({ stable: false, os, ol, ov, as, al, av, bs, bl, bv })
+const d2h = ab => ({ as, al, bs, bl }) => ({ ab, os: as, ol: al, abs: bs, abl: bl })
 const diff3 = (a, b, o) => {
   let offset = 0, hs = [], r = [], advance = e => e > offset ?
     r.push(stb('o', e, e - offset, o.slice(offset, e))) : 0
-  diff2hunk('a', diff(o, a), hs), diff2hunk('b', diff(o, b), hs)
+  log('a', '-'.repeat(40))
+  hs = hs.concat(diff(o, a).map(d2h('a')))
+  log('b', '-'.repeat(40))
+  hs = hs.concat(diff(o, b).map(d2h('b')))
+  hs.sort((a, b) => a.os - b.os);
   log('hs', ...hs)
-  hs.sort((a, b) => a.os - b.os); while (hs.length > 0) { // hunks
+  while (hs.length > 0) { // hunks
     let h = hs.shift(), rhs = [h] // region hunks
     let s = h.os, e = h.os + h.ol; advance(s)
     while (hs.length > 0) {
@@ -87,14 +95,15 @@ const diff3 = (a, b, o) => {
       bounds.b = [b.length, -1, o.length, -1]
       while (rhs.length > 0) {
         h = rhs.shift(); const bs = bounds[h.ab]
-        bs[0] = min(h.abs, bs[0]), bs[1] = min(h.abs + h.abl, bs[1])
-        bs[2] = min(h.os, bs[2]), bs[3] = min(h.os + h.ol, bs[3])
+        bs[0] = min(h.abs, bs[0]), bs[1] = max(h.abs + h.abl, bs[1])
+        bs[2] = min(h.os, bs[2]), bs[3] = max(h.os + h.ol, bs[3])
       } const as = bounds.a[0] + s - bounds.a[2]
       const ae = bounds.a[1] + e - bounds.a[3]
       const bs = bounds.b[0] + s - bounds.b[2]
       const be = bounds.b[1] + e - bounds.b[3]
-      r.push(ust(s, e - s, o.slice(s, e), ae, ae - as,
-        a.slice(as, ae), be, be - bs, b.slice(bs, be)))
+      log(s, e, as, ae, bs, be, bounds.a, bounds.b)
+      r.push(ust(s, e - s, o.slice(s, e), as, ae - as,
+        a.slice(as, ae), bs, be - bs, b.slice(bs, be)))
     } else if (h.abl > 0) r.push(stb(h.ab, h.abs, h.abl, (h.ab === 'a'
       ? a : b).slice(h.abs, h.abs + h.abl))); offset = e
   } advance(o.length); return r
@@ -106,6 +115,6 @@ const diff3 = (a, b, o) => {
   const b = `samepart/ecge`.split('')
   const r = diff3(a, b, o)
   r.forEach(o => log(...o.v ?? [o.ov, o.av, o.bv]))
-  // log(...r)
+  log(...r)
   // log('-'.repeat(80))
 }
