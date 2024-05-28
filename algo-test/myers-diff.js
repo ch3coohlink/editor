@@ -34,16 +34,11 @@ const diff = (e, f, i = 0, j = 0) => {
               // log('back', ...a, '|', ...b)
               let ao = a[a.length - 1], bo = b[0]
               log('combine', ao?.t, bo?.t, ao, bo,)
-              if (!(ao && bo)) { log('not combine'); return a.concat(b) }
-              if (ao.al !== 0 && ao.as + ao.al === bo.as) {
-                log('a combine')
+              if (ao && bo && (ao.as + ao.al === bo.as || ao.bs + ao.bl === bo.bs)) {
                 ao.al += bo.al, ao.bl += bo.bl
-              } else if (ao.bl !== 0 && ao.bs + ao.bl === bo.bs) {
-                log('b combine')
-                ao.al += bo.al, ao.bl += bo.bl
+                log(ao.t, bo.t, ao)
+                return a.concat(b.slice(1))
               } else { log('not combine'); return a.concat(b) }
-              log(ao.t, bo.t, ao)
-              return a.concat(b.slice(1))
             } else if (M > N) {
               // log('m > n')
               R = diff([], f.slice(N), i + N, j + N)
@@ -74,7 +69,8 @@ log('-'.repeat(80))
 const stb = (b, s, l, v) => ({ stable: true, buffer: b, s, l, v })
 const ust = (os, ol, ov, as, al, av, bs, bl, bv) =>
   ({ stable: false, os, ol, ov, as, al, av, bs, bl, bv })
-const d2h = ab => ({ as, al, bs, bl }) => ({ ab, os: as, ol: al, abs: bs, abl: bl })
+const d2h = ab => ({ as, al, bs, bl }) =>
+  ({ ab, os: as, ol: al, abs: bs, abl: bl })
 const diff3 = (a, b, o) => {
   let offset = 0, hs = [], r = [], advance = e => e > offset ?
     r.push(stb('o', e, e - offset, o.slice(offset, e))) : 0
@@ -112,7 +108,7 @@ const diff3 = (a, b, o) => {
 {
   const o = `samepart/acde`.split('')
   const a = `same/adcde`.split('')
-  const b = `samepart/ecge`.split('')
+  const b = `samediskecge`.split('')
   const r = diff3(a, b, o)
   r.forEach(o => log(...o.v ?? [o.ov, o.av, o.bv]))
   log(...r)

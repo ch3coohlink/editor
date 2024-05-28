@@ -529,8 +529,9 @@ function invertPatch(patch) {
   }));
 }
 
+// this case failed?
 const o = `samepart/acde`.split('')
 const a = `same/adcde`.split('')
-const b = `samepart/ecge`.split('')
+const b = `samediskecge`.split('')
 const r = mergeDiff3(a, o, b)
 log(...r.result)
