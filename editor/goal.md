@@ -1,7 +1,12 @@
 - [x] hash file
 - [x] diff
 - [ ] merge
-  - [ ] least common sequence
+  - [x] least common sequence
+  - [x] diff3
+  - [x] least common ancestor
+  - [ ] conflit solver
+  - [ ] create wait-to-solve version
+  - [ ] apply solve
 - [ ] text editor tab
 - [x] version graph and file explorer
 - [x] fade in/out animation for graph node
@@ -18,3 +23,4 @@
 - [x] dealing with overlap write
 - [x] better node click detection (allow small dragging amount)
 - [ ] git editor ui
+- [ ] change file overwrite behaviour

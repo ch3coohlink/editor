@@ -76,7 +76,7 @@
     ({ stable: false, os, ol, ov, as, al, av, bs, bl, bv })
   const d2h = ab => ({ as, al, bs, bl }) =>
     ({ ab, os: as, ol: al, abs: bs, abl: bl })
-  $.diff3 = (a, b, o) => {
+  $.diff3 = (o, a, b) => {
     let offset = 0, hs = [], r = [], advance = e => e > offset ?
       r.push(stb('o', e, e - offset, o.slice(offset, e))) : 0
     hs = hs.concat(diff(o, a).map(d2h('a')))
@@ -91,9 +91,9 @@
         let bounds = { a: [a.length, -1, o.length, -1] }
         bounds.b = [b.length, -1, o.length, -1]
         while (rhs.length > 0) {
-          h = rhs.shift(); const bs = bounds[h.ab]
-          bs[0] = min(h.abs, bs[0]), bs[1] = max(h.abs + h.abl, bs[1])
-          bs[2] = min(h.os, bs[2]), bs[3] = max(h.os + h.ol, bs[3])
+          h = rhs.shift(); const b = bounds[h.ab]
+          b[0] = min(h.abs, b[0]), b[1] = max(h.abs + h.abl, b[1])
+          b[2] = min(h.os, b[2]), b[3] = max(h.os + h.ol, b[3])
         } const as = bounds.a[0] + s - bounds.a[2]
         const ae = bounds.a[1] + e - bounds.a[3]
         const bs = bounds.b[0] + s - bounds.b[2]
@@ -318,6 +318,7 @@ $.git = ($ = graph()) => {
     $.addhashobj = (h, t) => {
       const o = addnode(h); o.type = 'hashobj', o.value = t
     }
+    // TODO: change overwrite behaviour
     $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
       const b = addtonode(loc, name, _, force)
       if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
@@ -353,14 +354,51 @@ $.git = ($ = graph()) => {
       if (b) { copytree(prev, o.id), g[prev].lock = true }
       emit('newver', { p: prev, pb: b, o }); return o
     }
+    $.nodeancester = n => {
+      let a = new Set, q = [], c = g[n]; while (c.nfrom > 0) {
+        for (const k in c.from) if (!a.has(k))
+          (a.add(k), q.push(g[k])); c = q.shift()
+      } return a
+    }
+    $.lcancester = (a, b) => {
+      const aa = nodeancester(a), ba = nodeancester(b)
+      const ca = aa.intersection(ba), da = new Set(ca)
+      for (const a of ca) for (const k in g[a].from)
+        da.delete(k); return da
+    }
+    $.diffver = (a, b, o, path, r = { add: new Set, del: new Set, mod: new Map }) => {
+      const ac = new Set(Object.keys(a.children))
+      const bc = new Set(Object.keys(b.children))
+      const pf = n => (!path ? '' : path + '/') + n
+      r.del = r.del.union(new Set([...ac.difference(bc)].map(pf)))
+      r.add = r.add.union(new Set([...bc.difference(ac)].map(pf)))
+      const cc = ac.intersection(bc), { del, add, mod } = r
+      for (let name of cc) {
+        const fa = g[a.children[name]], fb = g[b.children[name]]
+        const fo = o ? g[o.children[name]] : undefined
+        let p = pf(name); if (fa.type !== fb.type) {
+          del.add(p + (fa.type === 'dir' ? '/' : ''))
+          add.add(p + (fb.type === 'dir' ? '/' : ''))
+        } else {
+          if (fa.type === 'file' && fa.value !== fb.value) { /* diff text */
+            const at = g[fa.value].value.split('\n')
+            const bt = g[fb.value].value.split('\n')
+            if (fo && fo.type === 'file') {
+              const ot = g[fo.value].value.split('\n')
+              mod.set(p, diff3(at, ot, bt))
+            } else { mod.set(p, diff(at.split('\n'), bt.split('\n'))) }
+          } if (fa.type === 'link' && fa.value !== fb.value)
+            (del.add(p), add.add(p))
+          if (fa.type === 'dir') { diffver(fa, fb, fo, p, r) }
+        }
+      } return r
+    }
     $.merge = (a, b) => {
-      if (!(g[a] && g[b])) { }
-      // find most recent common ancestor
-      // diff a b with ancester
-      // diff the diff result in a and b, find conflict
-      // call the conflict solve procedure
-      // apply the solve, create a new version
-      // merge finish
+      if (!g[a]) { throw `non exist node: ${a}` }
+      if (!g[b]) { throw `non exist node: ${b}` }
+      let os = [...lcancester(a, b)], o = os[0]
+      a = g[a], b = g[b], o = g[o] // TODO: multi ancester merge
+      log(diffver(a, b, o))
     }
     $.writedes = (ver, text) => { g[ver].description = text }
     $.readdes = ver => delete g[ver].description
@@ -620,21 +658,12 @@ $.giteditor = ($ = git()) => {
 
 $.ge = giteditor()
 const a = ge.newver().id
-ge.writefile(a, 'a.js', 'twetrwerw')
-ge.writedir(a, 'b')
-ge.writelink(a, 'c', a)
+ge.writefile(a, 'a.js', 'aaa\nbbb\nccc')
 const b = ge.newver(a).id
-const c = ge.read(b, 'b').id
-ge.writedir(c, 'd')
-ge.writefile(c, 'e.js', 'dfasdfasd')
-const d = ge.newver(b).id
-ge.writefile(d, 'a.js', 'twetrwerw34345354', true)
-const e = ge.newver(b).id
-const f = ge.newver(e).id
-// ge.togglenodegit(b)
-// ge.togglenodegit(c)
+ge.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
+const c = ge.newver(a).id
+ge.writefile(c, 'a.js', 'bbb\n\ccc', true)
+ge.merge(b, c)
 
 document.body.append(ge.elm)
 listenframe(() => ge.frame())
-
-log(ge.g)

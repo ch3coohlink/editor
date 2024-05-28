@@ -37,7 +37,7 @@ const ust = (os, ol, ov, as, al, av, bs, bl, bv) =>
   ({ stable: false, os, ol, ov, as, al, av, bs, bl, bv })
 const d2h = ab => ({ as, al, bs, bl }) =>
   ({ ab, os: as, ol: al, abs: bs, abl: bl })
-$.diff3 = (a, b, o) => {
+$.diff3 = (o, a, b) => {
   let offset = 0, hs = [], r = [], advance = e => e > offset ?
     r.push(stb('o', e, e - offset, o.slice(offset, e))) : 0
   hs = hs.concat(diff(o, a).map(d2h('a')))
@@ -52,9 +52,9 @@ $.diff3 = (a, b, o) => {
       let bounds = { a: [a.length, -1, o.length, -1] }
       bounds.b = [b.length, -1, o.length, -1]
       while (rhs.length > 0) {
-        h = rhs.shift(); const bs = bounds[h.ab]
-        bs[0] = min(h.abs, bs[0]), bs[1] = max(h.abs + h.abl, bs[1])
-        bs[2] = min(h.os, bs[2]), bs[3] = max(h.os + h.ol, bs[3])
+        h = rhs.shift(); const b = bounds[h.ab]
+        b[0] = min(h.abs, b[0]), b[1] = max(h.abs + h.abl, b[1])
+        b[2] = min(h.os, b[2]), b[3] = max(h.os + h.ol, b[3])
       } const as = bounds.a[0] + s - bounds.a[2]
       const ae = bounds.a[1] + e - bounds.a[3]
       const bs = bounds.b[0] + s - bounds.b[2]
@@ -70,7 +70,7 @@ $.diff3 = (a, b, o) => {
   const o = `samepart/acde`.split('')
   const a = `same/adcde`.split('')
   const b = `samediskecge`.split('')
-  const r = diff3(a, b, o)
+  const r = diff3(o, a, b)
   r.forEach(o => log(...o.v ?? [o.ov, o.av, o.bv]))
   log(...r)
   // log('-'.repeat(80))
