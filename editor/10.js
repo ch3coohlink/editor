@@ -360,7 +360,7 @@ $.git = ($ = graph()) => {
           (a.add(k), q.push(g[k])); c = q.shift()
       } return a
     }
-    $.lcancester = (a, b) => {
+    $.lcas = (a, b) => { // least common ancestors
       const aa = nodeancester(a), ba = nodeancester(b)
       const ca = aa.intersection(ba), da = new Set(ca)
       for (const a of ca) for (const k in g[a].from)
@@ -396,7 +396,7 @@ $.git = ($ = graph()) => {
     $.merge = (a, b) => {
       if (!g[a]) { throw `non exist node: ${a}` }
       if (!g[b]) { throw `non exist node: ${b}` }
-      let os = [...lcancester(a, b)], o = os[0]
+      let os = [...lcas(a, b)], o = os[0]
       a = g[a], b = g[b], o = g[o] // TODO: multi ancester merge
       log(diffver(a, b, o))
     }
