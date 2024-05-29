@@ -5,7 +5,7 @@
   - [x] diff3
   - [x] least common ancestor
   - [ ] conflit solver
-  - [ ] create wait-to-solve version
+  - [x] create wait-to-solve version
   - [ ] apply solve
 - [ ] text editor tab
 - [x] version graph and file explorer

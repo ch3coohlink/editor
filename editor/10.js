@@ -130,8 +130,8 @@
   }; requestAnimationFrame(frame)
   $.setvaluebytime = (f, e, l = 0.5) => {
     let t = 0, s = () => {
-      let v = t / l; f(v); t += time.delta
       if (t > l) { f(1); if (e) { e() } cancelpreframe(s) }
+      else { f(t / l); t += time.delta }
     }; listenpreframe(s)
   }
 } { // global pointer event ---------------------------------------------------
@@ -348,11 +348,13 @@ $.git = ($ = graph()) => {
         }
       }
     }
-    $.newver = (prev, b = prev !== undefined) => {
-      if (b) { o = addtonode(prev) } else { o = addnode() }
+    $.newver = (p, b = p !== undefined) => {
+      if (b && g[p] && g[p].type !== 'version') {
+        throw `privous node is not a git version: ${p}`
+      } if (b) { o = addtonode(p) } else { o = addnode() }
       o.type = 'version', o.verid = uuid()
-      if (b) { copytree(prev, o.id), g[prev].lock = true }
-      emit('newver', { p: prev, pb: b, o }); return o
+      if (b) { copytree(p, o.id), g[p].lock = true }
+      emit('newver', { p, pb: b, o }); return o
     }
     $.nodeancester = n => {
       let a = new Set, q = [], c = g[n]; while (c.nfrom > 0) {
@@ -366,39 +368,41 @@ $.git = ($ = graph()) => {
       for (const a of ca) for (const k in g[a].from)
         da.delete(k); return da
     }
-    $.diffver = (a, b, o, path, r = { add: new Set, del: new Set, mod: new Map }) => {
+    const dfobj = (a, b, r, t = 2) => ({ type: t, a: a.id, b: b.id, r })
+    $.diffver = (a, b, o, path, r) => {
+      r = r ?? { add: new Set, del: new Set, mod: new Map }
       const ac = new Set(Object.keys(a.children))
       const bc = new Set(Object.keys(b.children))
-      const pf = n => (!path ? '' : path + '/') + n
-      r.del = r.del.union(new Set([...ac.difference(bc)].map(pf)))
-      r.add = r.add.union(new Set([...bc.difference(ac)].map(pf)))
+      const ps = !path ? '' : path + '/'
+      const ff = a => n => pf(ps + n, g[a.children[n]])
+      const pf = (p, f) => p + (f.type === 'dir' ? '/' : '')
+      r.del = r.del.union(new Set([...ac.difference(bc)].map(ff(a))))
+      r.add = r.add.union(new Set([...bc.difference(ac)].map(ff(b))))
       const cc = ac.intersection(bc), { del, add, mod } = r
       for (let name of cc) {
         const fa = g[a.children[name]], fb = g[b.children[name]]
         const fo = o ? g[o.children[name]] : undefined
-        let p = pf(name); if (fa.type !== fb.type) {
-          del.add(p + (fa.type === 'dir' ? '/' : ''))
-          add.add(p + (fb.type === 'dir' ? '/' : ''))
-        } else {
-          if (fa.type === 'file' && fa.value !== fb.value) { /* diff text */
+        let p = ps + name; if (fa.type === fb.type) {
+          if (fa.type === 'file' && fa.value !== fb.value) {
             const at = g[fa.value].value.split('\n')
             const bt = g[fb.value].value.split('\n')
             if (fo && fo.type === 'file') {
               const ot = g[fo.value].value.split('\n')
-              mod.set(p, diff3(at, ot, bt))
-            } else { mod.set(p, diff(at.split('\n'), bt.split('\n'))) }
-          } if (fa.type === 'link' && fa.value !== fb.value)
-            (del.add(p), add.add(p))
+              mod.set(p, dfobj(a, b, diff3(at, ot, bt), 3))
+            } else { mod.set(p, dfobj(a, b, diff(at, bt))) }
+          } if (fa.type === 'link' && fa.value !== fb.value) (del.add(p), add.add(p))
           if (fa.type === 'dir') { diffver(fa, fb, fo, p, r) }
-        }
+        } else (del.add(pf(p, fa)), add.add(pf(p, fa)))
       } return r
     }
     $.merge = (a, b) => {
       if (!g[a]) { throw `non exist node: ${a}` }
       if (!g[b]) { throw `non exist node: ${b}` }
-      let os = [...lcas(a, b)], o = os[0]
-      a = g[a], b = g[b], o = g[o] // TODO: multi ancester merge
-      log(diffver(a, b, o))
+      let os = [...lcas(a, b)], o = os[0] // TODO: multi ancester merge
+      const r = diffver(g[a], g[b], g[o])
+      const m = addtonode(a); addedge(b, m.id)
+      m.verid = uuid(), m.type = 'mergever', m.value = r
+      emit('merge', { a, b, o: m })
     }
     $.writedes = (ver, text) => { g[ver].description = text }
     $.readdes = ver => delete g[ver].description
@@ -621,13 +625,22 @@ $.giteditor = ($ = git()) => {
     vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
     vg.on('nodeclick', ({ o }) => {
       if (o.type === 'file') { log(g[g[nodemap.getr(o.id)].value].value) }
+      if (o.type === 'mergever') { log(g[nodemap.getr(o.id)].value) }
       togglenode(o)
     })
+    on('merge', ({ a, b, o }) => {
+      const n = vg.addtonode(nodemap.get(a))
+      vg.addedge(nodemap.get(b), n.id)
+      n.name = o.verid.slice(0, 8)
+      n.open = false; n.type = o.type
+      emit('add visual node', { n, o })
+    })
+    on('add visual node', ({ n, o }) => (nodemap.set(o.id, n.id), setnodecolor(n)))
     on('newver', ({ p, pb, o }) => {
       const n = pb ? vg.addtonode(nodemap.get(p)) : vg.addnode()
       n.name = o.verid.slice(0, 8)
       n.open = false; n.type = pb ? 'version' : 'rootver'
-      nodemap.set(o.id, n.id); setnodecolor(n)
+      emit('add visual node', { n, o })
     }); $.frame = vg.frame
     $.togglenodegit = id => togglenode(vg.g[nodemap.get(id)])
     $.togglenode = n => {
@@ -649,7 +662,7 @@ $.giteditor = ($ = git()) => {
       }
     }
     $.setnodecolor = n => n.elm.path.setAttribute('fill', {
-      rootver: '#f47771', version: '#83c1bc',
+      rootver: '#f47771', version: '#83c1bc', mergever: '#de57dc',
       dir: '#fbc85f', link: '#8e4483', file: '#2b5968',
     }[n.type])
     Object.defineProperty($, 'elm', { get: () => vg.se })
@@ -661,6 +674,8 @@ const a = ge.newver().id
 ge.writefile(a, 'a.js', 'aaa\nbbb\nccc')
 const b = ge.newver(a).id
 ge.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
+ge.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
+ge.writedir(b, 'b')
 const c = ge.newver(a).id
 ge.writefile(c, 'a.js', 'bbb\n\ccc', true)
 ge.merge(b, c)
