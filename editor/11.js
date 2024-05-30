@@ -259,7 +259,7 @@
 }
 .no-scroll-bar::-webkit-scrollbar { 
   display: none;  /* Safari and Chrome */
-}`; document.body.append(s)
+}`; document.head.append(s)
 }
 
 $.splitctn = ($ = dom()) => {
@@ -273,7 +273,7 @@ $.splitctn = ($ = dom()) => {
       }); direction = 'vertical'
     }
     $.size = 0
-    $.getitem = e => [...children]
+    $.getitem = e => [...children].indexOf(e)
     $.additem = (e, i = 0) => {
       dsplice($, i, 0, e)
       size++
@@ -282,13 +282,14 @@ $.splitctn = ($ = dom()) => {
       if (e.parentNode === $) {
         e.remove()
         size--
-      } if (size === 0) { $.remove() }
-      if (size === 1) {
+      } if (size === 0) {
+        if (splitctn.is(parentNode)) { parentNode.delitem($) }
+        else { $.remove() }
+      } else if (size === 1) {
         const c = children[0]
         if (splitctn.is(c)) { $.replaceWith(c) }
-      } // if the only child is a split-container, replace
+      }
     }
-
   } return $
 }; splitctn.is = n => n.classList.contains('split-container')
 
@@ -387,8 +388,8 @@ $.docking = ($ = dom()) => {
       }
     })
     $.split = (order, d = 'horizontal') => {
-      let dk = docking(), pt = parentNode
-      pt.size > 1 ? pt = makecontain() : 0
+      let dk = docking(), pt = parentNode;
+      (pt.size > 1 && pt.direction !== d) ? pt = makecontain() : 0
       pt.direction = d, pt.additem(dk, order); return dk
     }
     $.move = e => { tabs.append(e), focustab(e) }
