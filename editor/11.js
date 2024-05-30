@@ -1,4 +1,4 @@
-// 11.js - text editor tabs
+// 11.js - docking system
 //# sourceURL=7bF10sAz0.js
 
 { // basic utility ------------------------------------------------------------
@@ -16,6 +16,15 @@
   let { max, min } = Math; $.clamp = (v, s, l) => max(min(v, l), s)
   $.dom = (n = 'div') => document.createElement(n)
   $.svg = n => document.createElementNS('http://www.w3.org/2000/svg', n)
+  const dfrag = document.createDocumentFragment.bind(document)
+  $.dsplice = (p, i, c, ...n) => {
+    const d = p.childNodes, rm = [], l = d.length
+    const f = dfrag(), s = i < 0 ? l + i : i
+    const e = typeof c === 'number' ? s + c : l
+    for (let i = e; i < s; i++) if (d[s]) rm.push(p.removeChild(d[s]))
+    for (const e of n) { f.appendChild(e) }
+    p.insertBefore(f, d[s]); return rm
+  }
   $.eventnode = ($ = {}) => {
     $._handles = {}; with ($) {
       $.emit = (t, ...a) => _handles[t]?.forEach(f => f(...a))
@@ -148,6 +157,8 @@
   window.addEventListener('touchend', u)
   window.addEventListener('mousemove', m)
   window.addEventListener('touchmove', m)
+  $.geteventlocation = (e, ef = e.touches) => ef && ef.length == 1
+    ? { x: ef[0].pageX, y: ef[0].pageY } : { x: e.pageX, y: e.pageY }
 } { // seed random ------------------------------------------------------------
   let { imul, log, cos, sqrt, ceil, PI, floor, random } = Math, mb32 =
     a => t => (a = a + 1831565813 | 0, t = imul(a ^ a >>> 15, 1 | a),
@@ -251,33 +262,136 @@
 }`; document.body.append(s)
 }
 
-$.geteventlocation = (e, ef = e.touches) => ef && ef.length == 1
-  ? { x: ef[0].pageX, y: ef[0].pageY } : { x: e.pageX, y: e.pageY }
+$.splitctn = ($ = dom()) => {
+  with ($) {
+    {
+      className = 'split-container'
+      style.height = '100%', style.display = 'flex'
+      let d; Object.defineProperty($, 'direction', {
+        set: v => (d = v === 'vertical', style.flexDirection = d ? 'column' : 'row'),
+        get: () => d ? 'vertical' : 'horizontal',
+      }); direction = 'vertical'
+    }
+    $.size = 0
+    $.getitem = e => [...children]
+    $.additem = (e, i = 0) => {
+      dsplice($, i, 0, e)
+      size++
+    }
+    $.delitem = e => {
+      if (e.parentNode === $) {
+        e.remove()
+        size--
+      } if (size === 0) { $.remove() }
+      if (size === 1) {
+        const c = children[0]
+        if (splitctn.is(c)) { $.replaceWith(c) }
+      } // if the only child is a split-container, replace
+    }
 
+  } return $
+}; splitctn.is = n => n.classList.contains('split-container')
 
 $.docking = ($ = dom()) => {
   with ($) {
     { // style ----------------------------------------------------------------
-      style.height = '100%'
+      className = 'docking'
+      style.height = '100%', style.width = '100%'
       style.display = 'flex'
       style.flexDirection = 'column'
       style.overflow = 'hidden'
-    } $.tabs = dom(), $.ctn = dom(); {
+      style.position = 'relative'
+    } $.tabs = dom(); {
+      tabs.className = 'tab-list'
       tabs.style.height = '30px'
       tabs.style.background = '#00000010'
       tabs.style.borderBottom = '1px solid #00000040'
       tabs.style.display = 'flex'
       tabs.style.alignItems = 'center'
-      tabs.style.paddingLeft = '1px'
-      tabs.style.paddingTop = '1px'
       tabs.style.overflow = 'hidden'
       tabs.style.overflowX = 'auto'
       tabs.classList.add('no-scroll-bar')
+    } $.ctn = dom(); {
+      ctn.className = 'tab-content'
       ctn.style.overflow = 'hidden'
       ctn.style.height = '100%'
       ctn.style.borderLeft = ctn.style.borderRight =
         ctn.style.borderBottom = '1px solid #00000040'
-    } $.append(tabs, ctn)
+    } $.idf = dom(); { // identifier ------------------------------------------
+      idf.className = 'position-identifier'
+      idf.style.position = 'absolute'
+      idf.style.zIndex = '100'
+      idf.style.transition = 'all 0.1s'
+      idf.style.pointerEvents = 'none'
+      $.setidf = (x, y, w, h, c = '#006eff75') => {
+        idf.style.background = c
+        idf.style.left = x + 'px'
+        idf.style.top = y + 'px'
+        idf.style.width = w + 'px'
+        idf.style.height = h + 'px'
+      }, $.hideidf = () => {
+        idf.style.background = 'transparent'
+      }, hideidf(), $.idfonte = (e, te) => {
+        const pb = $.getBoundingClientRect()
+        const b = te.getBoundingClientRect()
+        const p = geteventlocation(e), w = 2
+        let x = p.x < b.left + b.width / 2 ? b.left : b.right
+        x = x - pb.left - w; if (x < 0) { x += w }
+        setidf(x, 0, w * 2, tabs.clientHeight, '#0047ffd1')
+      }
+    } $.append(tabs, ctn, idf)
+    Object.defineProperty($, 'size', { get: () => tabs.childNodes.length })
+    $.addEventListener('dragleave', e => hideidf())
+    const tabsdrag = (e, l = tabs.children.length) => (l > 0 ?
+      idfonte(e, tabs.children[l - 1]) : hideidf(), e.preventDefault())
+    tabs.addEventListener('dragenter', tabsdrag)
+    tabs.addEventListener('dragover', tabsdrag)
+    tabs.addEventListener('drop', (e, l = tabs.children.length) =>
+      (hideidf(), l > 0 ? dropontab(e, tabs.children[l - 1]) : 0))
+    const dataslot = 'd9sI2kdCf1/docking-tabs-id'
+    const { abs, min } = Math, calsplit = e => {
+      const b = $.getBoundingClientRect()
+      const p = geteventlocation(e)
+      const w = b.width, h = b.height
+      const x = p.x - b.left, y = p.y - b.top
+      const dx = min(x, w - x), dy = min(y, h - y)
+      if (dx > w / 4 && dy > h / 4) { return 'mid' }
+      const r = h / w, fa = y > x * r, fb = y > (w - x) * r
+      if (!fa && !fb) { return 'top' }
+      else if (fa && !fb) { return 'left' }
+      else if (!fa && fb) { return 'right' }
+      else if (fa && fb) { return 'bottom' }
+    }, ctndg = e => {
+      const b = $.getBoundingClientRect()
+      const w = b.width, h = b.height
+      e.preventDefault(); switch (calsplit(e)) {
+        case 'mid': setidf(0, 0, w, h); break;
+        case 'top': setidf(0, 0, w, h / 2); break;
+        case 'left': setidf(0, 0, w / 2, h); break;
+        case 'right': setidf(w / 2, 0, w / 2, h); break;
+        case 'bottom': setidf(0, h / 2, w, h / 2); break;
+      }
+    }
+    ctn.addEventListener('dragenter', ctndg)
+    ctn.addEventListener('dragover', ctndg)
+    ctn.addEventListener('drop', e => {
+      hideidf()
+      let r = getdgo(e); if (!r) { return }
+      if (r.cp() === $ && size === 1) { return }
+      let d = calsplit(e); r.undock(); switch (d) {
+        case 'mid': move(r); break;
+        case 'top': split(0, 'vertical').move(r); break;
+        case 'left': split(0).move(r); break;
+        case 'right': split(1).move(r); break;
+        case 'bottom': split(1, 'vertical').move(r); break;
+      }
+    })
+    $.split = (order, d = 'horizontal') => {
+      let dk = docking(), pt = parentNode
+      pt.size > 1 ? pt = makecontain() : 0
+      pt.direction = d, pt.additem(dk, order); return dk
+    }
+    $.move = e => { tabs.append(e), focustab(e) }
     $.focuson = e => (ctn.innerHTML = '', ctn.append(e))
     $.focustab = te => {
       [...tabs.children].forEach(e => {
@@ -285,12 +399,19 @@ $.docking = ($ = dom()) => {
       }); focuson(te.elm); te.style.zIndex = 1
       te.style.boxShadow = '#009eff 0px 0px 10px 1px'
     }
-    // tabs.addEventListener('drop', log)
-    tabs.addEventListener('dragleave', e => { })
-    tabs.addEventListener('dragover', e => {
-      e.preventDefault()
-      log('dragover on tabs')
-    })
+    const getdgo = (e, r = e.dataTransfer.getData(dataslot)) =>
+      !r ? _ : r = document.getElementById(r)
+    $.dropontab = (e, te) => {
+      hideidf(); let r = getdgo(e); if (!r) { return }
+      const tabs = te.parentNode, sp = r.parentNode === tabs
+      if (!sp) { r.undock() }
+      let a = [...tabs.children], i = a.indexOf(te)
+      const b = te.getBoundingClientRect()
+      const p = geteventlocation(e)
+      i += p.x < b.left + b.width / 2 ? 0 : 1
+      sp && i > a.indexOf(r) ? i -= 1 : 0
+      dsplice(tabs, i, 0, r), focustab(r)
+    }
     $.adddock = (e, t) => {
       let te = dom(); if (typeof t === 'string') {
         te.innerText = t
@@ -301,49 +422,38 @@ $.docking = ($ = dom()) => {
         te.style.padding = '5px'
         te.style.background = '#00000010'
         te.style.background = '#e0e0e0'
-        te.style.borderTopRightRadius =
-          te.style.borderTopLeftRadius = '5px'
         te.style.boxShadow = 'black 0 0 10px'
         te.style.userSelect = 'none'
-      } tabs.append(te), te.elm = e
-      te.addEventListener('drop', log)
-      // te.addEventListener('drop', e => e.preventDefault())
-      te.addEventListener('dragover', e => {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-
-        const b = te.getBoundingClientRect()
-        const p = geteventlocation(e)
-        log(p.x, b.left + b.width / 2)
-        log(`dragover on ${t}`)
-      })
-      te.draggable = true
-      focustab(te)
-      listenpointerdown(te, e => {
-        focustab(te)
-        // const s = geteventlocation(e), m = e => {
-        //   const c = geteventlocation(e)
-        //   // if ()
-        // }
-        // listenpointermove(m); listenpointerup(() => cancelpointermove(m))
-      })
+      } tabs.append(te), te.elm = e, te.id = uuid()
+      let cp = () => te.parentNode.parentNode; te.cp = cp
+      te.addEventListener('drop', e => (
+        e.stopImmediatePropagation(), cp().dropontab(e, te)))
+      te.addEventListener('dragstart', e =>
+      (e.dataTransfer.setData(dataslot, te.id),
+        e.dataTransfer.setDragImage(te, 0, 0)))
+      let dg = e => (cp().idfonte(e, te),
+        e.preventDefault(), e.stopImmediatePropagation())
+      te.addEventListener('dragenter', dg)
+      te.addEventListener('dragover', dg)
+      te.draggable = true; cp().focustab(te)
+      listenpointerdown(te, e => { cp().focustab(te) })
+      te.undock = () => cp().deldock(te)
     }
+    $.deldock = (te, e = (te.remove(), tabs.children[tabs.children.length - 1])) =>
+      e ? focustab(e) : parentNode.delitem($)
+    $.makecontain = (p = splitctn()) => ($.replaceWith(p), p.additem($), p)
+    setTimeout((p = parentNode) => p && !splitctn.is(p) ? makecontain() : 0)
   } return $
 }
-
-// document.body.addEventListener('click', e => e.stopImmediatePropagation)
 
 $.dk = docking()
 document.body.append(dk)
 
-dk.style.height = '500px'
+// dk.style.height = '500px'
 document.body.style.padding = '10px'
 
-let t = (e = dom()) => (
-  e.style.height = e.style.width = '100%',
-  e.innerText = uuid(), e)
-dk.adddock(t(), 'test1')
-dk.adddock(t(), 'test2')
-dk.adddock(t(), 'test3')
-dk.adddock(t(), 'test4')
+dk.adddock('1', 'test1')
+dk.adddock('2', 'test2')
+dk.adddock('3', 'test3')
+dk.adddock('4', 'test4')
 // listenframe(() => ge.frame())
