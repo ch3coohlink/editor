@@ -282,15 +282,29 @@ $.splitctn = ($ = dom()) => {
     const dragbar = () => {
       const d = dom(); {
         d.className = 'dragbar'
-        d.style.flexBasis = '2px'
+        d.style.flexBasis = '4px'
         d.style.flexShrink = '0'
         d.style.background = '#c9c9c9'
+        d.style.userSelect = 'none'
         d.style.cursor = dcstr()
       }
       listenpointerdown(d, e => {
-        const p = geteventlocation(e)
+        const c = [...children]
+        const i = c.indexOf(d)
+        const a = c[i - 1], b = c[i + 1]
+        const ab = a.getBoundingClientRect()
+        const bb = b.getBoundingClientRect()
+        const cb = d.getBoundingClientRect()
         const m = e => {
-
+          const p = geteventlocation(e)
+          let r; if (df) {
+            r = (p.y - ab.top) / (ab.height + bb.height + cb.height)
+          } else {
+            r = (p.x - ab.left) / (ab.width + bb.width + cb.width)
+          }
+          a.style.flexBasis = (clamp(r, 0, 1) * 100).toFixed(0) + '%'
+          b.style.flexBasis = ((1 - clamp(r, 0, 1)) * 100).toFixed(0) + '%'
+          log(r, a.style.flexBasis, b.style.flexBasis)
         }
         listenpointermove(m); listenpointerup(() => cancelpointermove(m))
       })
@@ -303,6 +317,7 @@ $.splitctn = ($ = dom()) => {
       if (l < 0) { return } for (let i = 0; i < l; i++) {
         a.push(arr[i], dragbar())
       } a.push(arr[l]); $.append(...a)
+      arr.forEach(e => e.style.flexBasis = '100%')
     }
     $.getindex = e => arr.indexOf(e)
     $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
@@ -492,17 +507,22 @@ $.logdk = m => {
 
 $.docksys = eventnode()
 docksys.on('layout change', () => {
-  let root = sc
-  let simp = c => {
-    let d = []; for (const e of c.arr) if (splitctn.is(e) &&
-      (e.direction === c.direction || e.size === 1)) {
-      let i = c.getindex(e), a = []; d.unshift([e, i, a])
-      for (const ec of e.arr) { a.unshift(ec) }
-    } d.forEach(([e, i, a]) => (
-      c.delitem(e), a.forEach(v => c.additem(v, i))))
+  let tree = (c, a = []) => {
+    if (!a.direction) { a.direction = c.direction }
+    for (const e of c.arr) {
+      if (splitctn.is(e)) {
+        if (e.size === 1 || e.direction === c.direction) { tree(e, a) }
+        else { let t = []; a.push(t); tree(e, t) }
+      } else { a.push(e) }
+    } return a
+  }
+  let build = (a, c = splitctn()) => {
+    c.arr = [], c.direction = a.direction; for (const e of a) {
+      c.arr.push(Array.isArray(e) ? build(e) : e)
+    } c.update(); return c
   }
   logdk()
-  simp(sc)
+  build(tree(sc), sc)
   logdk('after simplify')
 })
 

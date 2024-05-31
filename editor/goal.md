@@ -26,5 +26,5 @@
 - [ ] change file overwrite behaviour
 - [x] docking system
   - [x] many many small issue
-  - [ ] simplify container tree
-  - [ ] resizing bar
+  - [x] simplify container tree
+  - [x] resizing bar
