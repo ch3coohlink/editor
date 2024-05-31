@@ -273,7 +273,7 @@ $.splitctn = ($ = dom()) => {
       }); direction = 'vertical'
     }
     $.size = 0
-    $.getitem = e => [...children].indexOf(e)
+    $.getindex = e => [...children].indexOf(e)
     $.additem = (e, i = 0) => {
       dsplice($, i, 0, e)
       size++
@@ -390,7 +390,7 @@ $.docking = ($ = dom()) => {
     $.split = (order, d = 'horizontal') => {
       let dk = docking(), pt = parentNode;
       (pt.size > 1 && pt.direction !== d) ? pt = makecontain() : 0
-      pt.direction = d, pt.additem(dk, order); return dk
+      pt.direction = d, pt.additem(dk, pt.getindex($) + order); return dk
     }
     $.move = e => { tabs.append(e), focustab(e) }
     $.focuson = e => (ctn.innerHTML = '', ctn.append(e))
