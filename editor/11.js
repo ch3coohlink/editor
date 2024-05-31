@@ -282,7 +282,7 @@ $.splitctn = ($ = dom()) => {
     const dragbar = () => {
       const d = dom(); {
         d.className = 'dragbar'
-        d.style.flexBasis = '4px'
+        d.style.flexBasis = '2px'
         d.style.flexShrink = '0'
         d.style.background = '#c9c9c9'
         d.style.userSelect = 'none'
@@ -304,7 +304,6 @@ $.splitctn = ($ = dom()) => {
           }
           a.style.flexBasis = (clamp(r, 0, 1) * 100).toFixed(0) + '%'
           b.style.flexBasis = ((1 - clamp(r, 0, 1)) * 100).toFixed(0) + '%'
-          log(r, a.style.flexBasis, b.style.flexBasis)
         }
         listenpointermove(m); listenpointerup(() => cancelpointermove(m))
       })
@@ -502,7 +501,8 @@ $.logdk = m => {
       if (c.classList.contains('docking')) { f(c.tabs.children, t) }
     }
   }; f(document.body.children)
-  log(a.join('\n'))
+  // log(a.join('\n'))
+  return a
 }
 
 $.docksys = eventnode()
@@ -511,7 +511,8 @@ docksys.on('layout change', () => {
     if (!a.direction) { a.direction = c.direction }
     for (const e of c.arr) {
       if (splitctn.is(e)) {
-        if (e.size === 1 || e.direction === c.direction) { tree(e, a) }
+        if (e.size === 1) { tree(e, a) }
+        else if (e.direction === c.direction) { tree(e, a) }
         else { let t = []; a.push(t); tree(e, t) }
       } else { a.push(e) }
     } return a
@@ -521,9 +522,15 @@ docksys.on('layout change', () => {
       c.arr.push(Array.isArray(e) ? build(e) : e)
     } c.update(); return c
   }
-  logdk()
+  const a = logdk()
   build(tree(sc), sc)
-  logdk('after simplify')
+  const b = logdk()
+  // log(a.join('\n'))
+  log(b.join('\n'))
+  const d = diff(a, b).map(({ as, al, bs, bl }) =>
+    [a.slice(as, as + al).join('\n'), '='.repeat(20), b.slice(bs, bs + bl).join('\n')]).flat()
+  d.unshift('diff:')
+  // log(d.join('\n'))
 })
 
 $.sc = splitctn()
@@ -536,6 +543,10 @@ const t1 = dk.adddock('1', 'test1')
 const t2 = dk.adddock('2', 'test2')
 const t3 = dk.adddock('3', 'test3')
 const t4 = dk.adddock('4', 'test4')
+const t5 = dk.adddock('5', 'test5')
+const t6 = dk.adddock('6', 'test6')
+const t7 = dk.adddock('7', 'test7')
+const t8 = dk.adddock('8', 'test8')
 const dk2 = dk.split(t4, 'bottom')
 const dk3 = dk2.split(t3, 'right')
 const dk4 = dk.split(t2, 'right')

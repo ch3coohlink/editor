@@ -28,3 +28,4 @@
   - [x] many many small issue
   - [x] simplify container tree
   - [x] resizing bar
+  - [ ] lots of bugs remaining...
