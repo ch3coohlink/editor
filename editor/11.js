@@ -53,7 +53,7 @@
       return N > 0 ? [{ as: i, al: N, bs: j, bl: 0 }]
         : M > 0 ? [{ as: i, al: 0, bs: j, bl: M }] : []
     const L = N + M, Z = 2 * min(N, M) + 2, delta = N - M, g = arr(), p = arr()
-    for (let D = 0; D < (L >>> 1) + (L % 2 != 0) + 1; D++) {
+    for (let D = 0, l = (L >>> 1) + (L % 2 !== 0) + 1; D < l; D++) {
       for (let o = 1; o >= 0; o--) {
         const of = o === 1, [c, d, os] = of ? [g, p, 1] : [p, g, -1]
         const ke = D - 2 * max(0, D - N), o_ = 1 - o
@@ -264,30 +264,41 @@
 
 $.splitctn = ($ = dom()) => {
   with ($) {
-    {
+    $.arr = []; let d; {
       className = 'split-container'
-      style.height = '100%', style.display = 'flex'
-      let d; Object.defineProperty($, 'direction', {
-        set: v => (d = v === 'vertical', style.flexDirection = d ? 'column' : 'row'),
-        get: () => d ? 'vertical' : 'horizontal',
+      style.width = style.height = '100%'
+      style.flexBasis = '100%'
+      style.display = 'flex'
+      Object.defineProperty($, 'direction', {
+        set: (v, d = v === 'vertical') => {
+          style.flexDirection = d ? 'column' : 'row'
+          for (const e of children) if (dragbar.is(e))
+            e.style.cursor = (d ? 'ns' : 'ew') + '-resize'
+        }, get: () => d ? 'vertical' : 'horizontal',
       }); direction = 'vertical'
-    }
-    $.size = 0
-    $.getindex = e => [...children].indexOf(e)
-    $.additem = (e, i = 0) => {
-      dsplice($, i, 0, e)
-      size++
-    }
-    $.delitem = e => {
-      if (e.parentNode === $) {
-        e.remove()
-        size--
-      } if (size === 0) {
-        if (splitctn.is(parentNode)) { parentNode.delitem($) }
-        else { $.remove() }
+    } Object.defineProperty($, 'size', { get: () => arr.length })
+    const dragbar = () => {
+      const d = dom(); {
+        d.className = 'dragbar'
+        d.style.flexBasis = '2px'
+        d.style.flexShrink = '0'
+        d.style.background = '#c9c9c9'
+        d.style.cursor = (d ? 'ns' : 'ew') + '-resize'
+      } return d
+    }, update = () => {
+      $.innerHTML = ''; let a = [], l = arr.length - 1
+      if (l < 0) { return } for (let i = 0; i < l; i++) {
+        a.push(arr[i], dragbar())
+      } a.push(arr[l]); $.append(...a)
+    }; dragbar.is = n => n.classList.contains('dragbar')
+    $.getindex = e => arr.indexOf(e)
+    $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
+    $.delitem = (e, i = getindex(e)) => {
+      if (i >= 0) { arr.splice(i, 1), update() } else return
+      if (size === 0) {
+        splitctn.is(parentNode) ? parentNode.delitem($) : $.remove()
       } else if (size === 1) {
-        const c = children[0]
-        if (splitctn.is(c)) { $.replaceWith(c) }
+        const c = arr[0]; if (splitctn.is(c)) { $.replaceWith(c) }
       }
     }
   } return $
@@ -297,8 +308,8 @@ $.docking = ($ = dom()) => {
   with ($) {
     { // style ----------------------------------------------------------------
       className = 'docking'
-      style.height = '100%', style.width = '100%'
       style.display = 'flex'
+      style.flexBasis = '100%'
       style.flexDirection = 'column'
       style.overflow = 'hidden'
       style.position = 'relative'
@@ -308,16 +319,16 @@ $.docking = ($ = dom()) => {
       tabs.style.background = '#00000010'
       tabs.style.borderBottom = '1px solid #00000040'
       tabs.style.display = 'flex'
+      tabs.style.flexShrink = '0'
       tabs.style.alignItems = 'center'
       tabs.style.overflow = 'hidden'
       tabs.style.overflowX = 'auto'
+      tabs.style.userSelect = 'none'
       tabs.classList.add('no-scroll-bar')
     } $.ctn = dom(); {
       ctn.className = 'tab-content'
       ctn.style.overflow = 'hidden'
       ctn.style.height = '100%'
-      ctn.style.borderLeft = ctn.style.borderRight =
-        ctn.style.borderBottom = '1px solid #00000040'
     } $.idf = dom(); { // identifier ------------------------------------------
       idf.className = 'position-identifier'
       idf.style.position = 'absolute'
@@ -333,12 +344,14 @@ $.docking = ($ = dom()) => {
       }, $.hideidf = () => {
         idf.style.background = 'transparent'
       }, hideidf(), $.idfonte = (e, te) => {
+        if (!isdgo(e)) { return }
         const pb = $.getBoundingClientRect()
         const b = te.getBoundingClientRect()
-        const p = geteventlocation(e), w = 2
+        const p = geteventlocation(e), w = 2, w2 = w * 2
         let x = p.x < b.left + b.width / 2 ? b.left : b.right
-        x = x - pb.left - w; if (x < 0) { x += w }
-        setidf(x, 0, w * 2, tabs.clientHeight, '#0047ffd1')
+        x = x - pb.left - w; if (x < 0) { x = 0 }
+        else if (x > pb.width - w2) { x = pb.width - w2 }
+        setidf(x, 0, w2, tabs.clientHeight, '#0047ffd1')
       }
     } $.append(tabs, ctn, idf)
     Object.defineProperty($, 'size', { get: () => tabs.childNodes.length })
@@ -349,7 +362,7 @@ $.docking = ($ = dom()) => {
     tabs.addEventListener('dragover', tabsdrag)
     tabs.addEventListener('drop', (e, l = tabs.children.length) =>
       (hideidf(), l > 0 ? dropontab(e, tabs.children[l - 1]) : 0))
-    const dataslot = 'd9sI2kdCf1/docking-tabs-id'
+    const dataslot = 'd9si2kdcf1/docking-tabs-id'
     const { abs, min } = Math, calsplit = e => {
       const b = $.getBoundingClientRect()
       const p = geteventlocation(e)
@@ -363,16 +376,23 @@ $.docking = ($ = dom()) => {
       else if (!fa && fb) { return 'right' }
       else if (fa && fb) { return 'bottom' }
     }, ctndg = e => {
+      e.preventDefault(); if (!isdgo(e)) { return }
       const b = $.getBoundingClientRect()
       const w = b.width, h = b.height
-      e.preventDefault(); switch (calsplit(e)) {
+      switch (calsplit(e)) {
         case 'mid': setidf(0, 0, w, h); break;
         case 'top': setidf(0, 0, w, h / 2); break;
         case 'left': setidf(0, 0, w / 2, h); break;
         case 'right': setidf(w / 2, 0, w / 2, h); break;
         case 'bottom': setidf(0, h / 2, w, h / 2); break;
       }
-    }
+    }, split = (order, d = 'horizontal') => {
+      let dk = docking(), pt = parentNode;
+      (pt.size > 1 && pt.direction !== d) ? pt = makecontain() : 0
+      pt.additem(dk, pt.getindex($) + order), pt.direction = d; return dk
+    }, isdgo = e => e.dataTransfer.types.includes(dataslot)
+    const getdgo = (e, r = e.dataTransfer.getData(dataslot)) =>
+      r ? r = document.getElementById(r) : undefined
     ctn.addEventListener('dragenter', ctndg)
     ctn.addEventListener('dragover', ctndg)
     ctn.addEventListener('drop', e => {
@@ -387,11 +407,6 @@ $.docking = ($ = dom()) => {
         case 'bottom': split(1, 'vertical').move(r); break;
       }
     })
-    $.split = (order, d = 'horizontal') => {
-      let dk = docking(), pt = parentNode;
-      (pt.size > 1 && pt.direction !== d) ? pt = makecontain() : 0
-      pt.direction = d, pt.additem(dk, pt.getindex($) + order); return dk
-    }
     $.move = e => { tabs.append(e), focustab(e) }
     $.focuson = e => (ctn.innerHTML = '', ctn.append(e))
     $.focustab = te => {
@@ -400,8 +415,6 @@ $.docking = ($ = dom()) => {
       }); focuson(te.elm); te.style.zIndex = 1
       te.style.boxShadow = '#009eff 0px 0px 10px 1px'
     }
-    const getdgo = (e, r = e.dataTransfer.getData(dataslot)) =>
-      !r ? _ : r = document.getElementById(r)
     $.dropontab = (e, te) => {
       hideidf(); let r = getdgo(e); if (!r) { return }
       const tabs = te.parentNode, sp = r.parentNode === tabs
@@ -425,6 +438,7 @@ $.docking = ($ = dom()) => {
         te.style.background = '#e0e0e0'
         te.style.boxShadow = 'black 0 0 10px'
         te.style.userSelect = 'none'
+        te.style.cursor = 'move'
       } tabs.append(te), te.elm = e, te.id = uuid()
       let cp = () => te.parentNode.parentNode; te.cp = cp
       te.addEventListener('drop', e => (
@@ -438,23 +452,29 @@ $.docking = ($ = dom()) => {
       te.addEventListener('dragover', dg)
       te.draggable = true; cp().focustab(te)
       listenpointerdown(te, e => { cp().focustab(te) })
-      te.undock = () => cp().deldock(te)
+      te.undock = () => cp().deldock(te); return te
     }
-    $.deldock = (te, e = (te.remove(), tabs.children[tabs.children.length - 1])) =>
-      e ? focustab(e) : parentNode.delitem($)
+    $.deldock = (te, e = (te.remove(), tabs.children[tabs.children
+      .length - 1])) => e ? focustab(e) : parentNode.delitem($)
     $.makecontain = (p = splitctn()) => ($.replaceWith(p), p.additem($), p)
     setTimeout((p = parentNode) => p && !splitctn.is(p) ? makecontain() : 0)
   } return $
 }
 
+$.logdg = (e, n = e.className) => {
+  const f = t => e.addEventListener(t, e => log(t, n))
+  f('dragstart')
+  f('dragenter')
+  f('dragleave')
+  // f('dragover')
+  f('dragend')
+}
+
 $.dk = docking()
 document.body.append(dk)
-
-// dk.style.height = '500px'
 document.body.style.padding = '10px'
 
-dk.adddock('1', 'test1')
-dk.adddock('2', 'test2')
-dk.adddock('3', 'test3')
-dk.adddock('4', 'test4')
-// listenframe(() => ge.frame())
+const t1 = dk.adddock('1', 'test1')
+const t2 = dk.adddock('2', 'test2')
+const t3 = dk.adddock('3', 'test3')
+const t4 = dk.adddock('4', 'test4')
