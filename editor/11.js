@@ -286,7 +286,15 @@ $.splitctn = ($ = dom()) => {
         d.style.flexShrink = '0'
         d.style.background = '#c9c9c9'
         d.style.cursor = dcstr()
-      } return d
+      }
+      listenpointerdown(d, e => {
+        const p = geteventlocation(e)
+        const m = e => {
+
+        }
+        listenpointermove(m); listenpointerup(() => cancelpointermove(m))
+      })
+      return d
     }, del = () => splitctn.is(parentNode) ?
       parentNode.delitem($) : $.remove()
     dragbar.is = n => n.classList.contains('dragbar')
@@ -297,34 +305,12 @@ $.splitctn = ($ = dom()) => {
       } a.push(arr[l]); $.append(...a)
     }
     $.getindex = e => arr.indexOf(e)
-    $.additem = (e, i = 0) => {
-      log('additem', arr, i)
-      arr.splice(i, 0, e), update()
-    }
+    $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
     $.rplitem = (a, b, i = arr.indexOf(a)) => i >= 0
       ? (delitem(a), additem(b, i)) : 0
     $.delitem = (e, i = getindex(e)) => {
-      log('delitem', arr)
       if (i >= 0) { arr.splice(i, 1), update() }
       else return; if (size === 0) { del() }
-      else if (size === 1) {
-        return
-        log('size===1, resizing', arr, $)
-        const c = arr[0]; if (splitctn.is(parentNode)) {
-          if (parentNode.direction === direction) {
-            log('same direction, replace self')
-            parentNode.rplitem($, c)
-          } else if (splitctn.is(c)) {
-            log('the only child is container, replace with it')
-            parentNode.rplitem($, c)
-          }
-        } else if ((splitctn.is(c))) {
-          log('we are root just do the replace')
-          log(arr, c.arr)
-          $.replaceWith(c)
-          logdk('after replace')
-        }
-      }
     }
     direction = 'vertical'
   } return $
@@ -343,7 +329,7 @@ $.docking = ($ = dom()) => {
       tabs.className = 'tab-list'
       tabs.style.height = '30px'
       tabs.style.background = '#00000010'
-      tabs.style.borderBottom = '1px solid #00000040'
+      tabs.style.borderBottom = '1px solid #c9c9c9'
       tabs.style.display = 'flex'
       tabs.style.flexShrink = '0'
       tabs.style.alignItems = 'center'
@@ -370,7 +356,7 @@ $.docking = ($ = dom()) => {
       }, $.hideidf = () => {
         idf.style.background = 'transparent'
       }, hideidf(), $.idfonte = (e, te) => {
-        if (!isdgo(e)) { return }
+        if (!isdgo(e)) { return } e.preventDefault()
         const pb = $.getBoundingClientRect()
         const b = te.getBoundingClientRect()
         const p = geteventlocation(e), w = 2, w2 = w * 2
@@ -383,7 +369,7 @@ $.docking = ($ = dom()) => {
     Object.defineProperty($, 'size', { get: () => tabs.childNodes.length })
     $.addEventListener('dragleave', e => hideidf())
     const tabsdrag = (e, l = tabs.children.length) => (l > 0 ?
-      idfonte(e, tabs.children[l - 1]) : hideidf(), e.preventDefault())
+      idfonte(e, tabs.children[l - 1]) : hideidf())
     tabs.addEventListener('dragenter', tabsdrag)
     tabs.addEventListener('dragover', tabsdrag)
     tabs.addEventListener('drop', (e, l = tabs.children.length) =>
@@ -402,7 +388,7 @@ $.docking = ($ = dom()) => {
       else if (!fa && fb) { return 'right' }
       else if (fa && fb) { return 'bottom' }
     }, ctndg = e => {
-      e.preventDefault(); if (!isdgo(e)) { return }
+      if (!isdgo(e)) { return } e.preventDefault()
       const b = $.getBoundingClientRect()
       const w = b.width, h = b.height
       switch (calsplit(e)) {
@@ -432,30 +418,27 @@ $.docking = ($ = dom()) => {
     }
     $.dropontab = (e, te) => {
       hideidf(); let rte = getdgo(e); if (!rte) { return }
-      const tabs = te.parentNode; rte.undock()
+      const tabs = te.parentNode, sp = rte.parentNode === tabs
+      if (!sp) { rte.undock() }
       let a = [...tabs.children], i = a.indexOf(te)
       const b = te.getBoundingClientRect()
       const p = geteventlocation(e)
       i += p.x < b.left + b.width / 2 ? 0 : 1
-      rte.parentNode === tabs && i > a.indexOf(rte) ? i -= 1 : 0
+      sp && i > a.indexOf(rte) ? i -= 1 : 0
       dsplice(tabs, i, 0, rte), focustab(rte)
+      docksys.emit('layout change')
     }
     $.split = (te, d) => {
       let s = (o, d = 'horizontal') => {
         let pt = parentNode; dk = docking()
-        if (pt.size > 1 && pt.direction !== d) {
-          log('replace pt')
-          pt = makecontain()
-        }
+        if (pt.size > 1 && pt.direction !== d) { pt = makecontain() }
         pt.additem(dk, pt.getindex($) + o), pt.direction = d
-      }, dk = $; te.undock();
-      logdk('after undocking')
-      switch (d) {
+      }, dk = $; te.undock(); switch (d) {
         case 'top': s(0, 'vertical'); break;
         case 'left': s(0); break;
         case 'right': s(1); break;
         case 'bottom': s(1, 'vertical'); break;
-      } dk.move(te); logdk('after split'); return dk
+      } dk.move(te); docksys.emit('layout change'); return dk
     }
     $.adddock = (e, t) => {
       let te = dom(); if (typeof t === 'string') {
@@ -466,7 +449,6 @@ $.docking = ($ = dom()) => {
         te.style.boxSizing = 'border-box'
         te.style.height = '100%'
         te.style.padding = '5px'
-        te.style.background = '#00000010'
         te.style.background = '#e0e0e0'
         te.style.boxShadow = 'black 0 0 10px'
         te.style.userSelect = 'none'
@@ -479,7 +461,7 @@ $.docking = ($ = dom()) => {
       (e.dataTransfer.setData(dataslot, te.id),
         e.dataTransfer.setDragImage(te, 0, 0)))
       let dg = e => (cp().idfonte(e, te),
-        e.preventDefault(), e.stopImmediatePropagation())
+        isdgo(e) ? e.stopImmediatePropagation() : 0)
       te.addEventListener('dragenter', dg)
       te.addEventListener('dragover', dg)
       te.draggable = true; cp().focustab(te)
@@ -494,19 +476,35 @@ $.docking = ($ = dom()) => {
 }
 
 $.logdk = m => {
-  const a = m ? [m] : [], f = (cs, i = 0) => {
+  const a = m ? [m] : [], f = (cs, t = '') => {
     for (const c of cs) {
       if (c.classList.contains('dragbar')) { continue }
-      let n = ' '.repeat(i * 2)
-      if (splitctn.is(c)) { n += c.className + ' ' + c.direction }
-      else if (c.classList.contains('single-tab')) { n += ' ' + c.innerText }
+      let n = t; if (splitctn.is(c)) { n += c.direction }
+      else if (c.classList.contains('single-tab')) { n += c.innerText }
+      else if (c.classList.contains('docking')) { n += '-----' }
       else { n += c.className } a.push(n)
-      if (splitctn.is(c)) { f(c.children, i + 1) }
-      if (c.classList.contains('docking')) { f(c.tabs.children, i + 1) }
+      if (splitctn.is(c)) { f(c.children, t + '|-') }
+      if (c.classList.contains('docking')) { f(c.tabs.children, t) }
     }
   }; f(document.body.children)
   log(a.join('\n'))
 }
+
+$.docksys = eventnode()
+docksys.on('layout change', () => {
+  let root = sc
+  let simp = c => {
+    let d = []; for (const e of c.arr) if (splitctn.is(e) &&
+      (e.direction === c.direction || e.size === 1)) {
+      let i = c.getindex(e), a = []; d.unshift([e, i, a])
+      for (const ec of e.arr) { a.unshift(ec) }
+    } d.forEach(([e, i, a]) => (
+      c.delitem(e), a.forEach(v => c.additem(v, i))))
+  }
+  logdk()
+  simp(sc)
+  logdk('after simplify')
+})
 
 $.sc = splitctn()
 $.dk = docking()
@@ -518,11 +516,6 @@ const t1 = dk.adddock('1', 'test1')
 const t2 = dk.adddock('2', 'test2')
 const t3 = dk.adddock('3', 'test3')
 const t4 = dk.adddock('4', 'test4')
-logdk()
-
 const dk2 = dk.split(t4, 'bottom')
 const dk3 = dk2.split(t3, 'right')
-console.clear()
-logdk()
-
-dk.split(t2, 'right')
+const dk4 = dk.split(t2, 'right')
