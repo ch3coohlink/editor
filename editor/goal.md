@@ -24,3 +24,6 @@
 - [x] better node click detection (allow small dragging amount)
 - [ ] git editor ui
 - [ ] change file overwrite behaviour
+- [x] docking system
+  - [x] many many small issue
+  - [ ] resizing bar
