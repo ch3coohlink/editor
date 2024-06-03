@@ -427,6 +427,7 @@
           e.style.zIndex = 0, e.style.boxShadow = 'black 0 0 10px'
         }); focuson(te.elm); te.style.zIndex = 1
         te.style.boxShadow = '#009eff 0px 0px 10px 1px'
+        te.emit('focus')
       }
       $.dropontab = (e, te) => {
         hideidf(); let rte = getdgo(e); if (!rte) { return }
@@ -452,12 +453,13 @@
           case 'bottom': s(1, 'vertical'); break;
         } dk.move(te); docksys.emit('layout change'); return dk
       }
-      $.adddock = (e, t) => {
-        let te = dom(); if (typeof t === 'string') {
+      $.adddock = (e, t, opt = {}) => {
+        let te = eventnode(dom()); if (typeof t === 'string') {
           te.innerText = t
         } else { te.append(t) } {
           te.classList = 'single-tab'
-          te.style.width = '100px'
+          te.style.flexShrink = '0'
+          te.style.minWidth = '100px'
           te.style.boxSizing = 'border-box'
           te.style.height = '100%'
           te.style.padding = '5px'
@@ -476,9 +478,16 @@
           isdgo(e) ? e.stopImmediatePropagation() : 0)
         te.addEventListener('dragenter', dg)
         te.addEventListener('dragover', dg)
+        te.undock = () => cp().deldock(te)
         te.draggable = true; cp().focustab(te)
-        listenpointerdown(te, e => { cp().focustab(te) })
-        te.undock = () => cp().deldock(te); return te
+        te.setclosable = f => (te.closable = true, te.onclosetab = f)
+        Object.assign(te, opt)
+        listenpointerdown(te, e => {
+          if (e.button === 1 && te.closable) {
+            te.onclosetab() ? te.undock() : 0
+            e.preventDefault()
+          } else { cp().focustab(te) }
+        }); return te
       }
       $.deldock = (te, e = (te.remove(), tabs.children[tabs.children
         .length - 1])) => e ? focustab(e) : parentNode.delitem($)
@@ -667,6 +676,10 @@
         const m = addtonode(a); addedge(b, m.id)
         m.verid = uuid(), m.type = 'mergever', m.value = r
         emit('merge', { a, b, o: m })
+      }
+      $.getversion = n => {
+        while (n.type !== 'version') { n = n.from[Object.keys(n.from)[0]] }
+        return n
       }
       $.writedes = (ver, text) => { g[ver].description = text }
       $.readdes = ver => delete g[ver].description
@@ -888,8 +901,13 @@
       $.vg = graphlayout(), $.nodemap = bimap()
       vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
       vg.on('nodeclick', ({ o }) => {
-        if (o.type === 'file') { log(g[g[nodemap.getr(o.id)].value].value) }
-        if (o.type === 'mergever') { log(g[nodemap.getr(o.id)].value) }
+        if (o.type === 'file') {
+          const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
+          emit('boot text editor', { o: fo, h: ho })
+        }
+        if (o.type === 'mergever') {
+          emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
+        }
         togglenode(o)
       })
       on('merge', ({ a, b, o }) => {
@@ -933,6 +951,62 @@
     } return $
   }
 
+} { // text editor ------------------------------------------------------------
+  $.texteditor = ($ = eventnode(dom())) => {
+    with ($) {
+      const root = attachShadow({ mode: "open" })
+      const css = dom("style")
+      css.innerText = `@import "${monaco_root}/editor/editor.main.css";`
+      const div = dom()
+      div.className = 'monaco-editor-div'
+      style.height = div.style.height = '100%'
+      root.append(div, css)
+      className = 'texteditor'
+
+      $.wordWrap = "on"
+      $.editor = monaco.editor.create(div, {
+        value: "",
+        language: "plaintext",
+        theme: "vs-light",
+        renderWhitespace: "all",
+        renderControlCharacters: true,
+        lightbulb: { enabled: false },
+        tabSize: 2,
+        cursorBlinking: "smooth",
+        cursorSmoothCaretAnimation: "on",
+        smoothScrolling: true,
+        wordBasedSuggestions: 'off',
+        wordWrap,
+      })
+      editor.addAction({
+        id: "save-text-file", label: "Save File",
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        run: () => emit("filesave", value),
+      })
+      editor.addAction({
+        id: "toggle-word-warp", label: "Toggle Word Warp",
+        keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
+        run: () => ($.wordWrap = wordWrap === "on" ? "off" : "on",
+          editor.updateOptions({ wordWrap })),
+      })
+
+      $.change_language = l =>
+        monaco.editor.setModelLanguage(editor.getModel(), l)
+      new ResizeObserver(() => editor.layout()).observe(div)
+      editor.onDidChangeModelContent(e => emit("change", e))
+      editor.trigger('editor', 'hideSuggestWidget', [])
+      Object.defineProperty($, "value",
+        { get: () => editor.getValue(), set: v => editor.setValue(v) })
+      $.open = () => { parent.style.display = "" }
+      $.close = () => { parent.style.display = "none" }
+    } return $
+  }
+} { // conflict editor --------------------------------------------------------
+  $.cfeditor = ($ = eventnode(dom())) => {
+    with ($) {
+
+    } return $
+  }
 }
 
 $.ve = vcseditor()
@@ -942,9 +1016,41 @@ $.sc = splitctn()
 $.dk = docking()
 sc.additem(dk)
 document.body.append(sc)
+$.opente = ({ o, h }) => {
+  const te = texteditor()
+  te.value = h.value
+  te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
+  te.on('save', () => { })
+  const v = ve.getversion(o).verid.slice(0, 8)
+  const n = v + '/' + o.from[Object.keys(o.from)[0]].to[o.id].name
+  let cgd = false, askclose = () => {
+    const w = dom('span')
+    w.innerText = 'file not saved, really close?'
+    w.style.color = '#f00'
+    tb.append(w)
+    setTimeout(() => cgd = false)
+  }
+  if (!dk2.parentNode) {
+    const t = dk.adddock('', 'texteditor')
+    t.setclosable(() => true)
+    dk2 = dk.split(t, 'top')
+  }
+  const tb = dk2.adddock(te, n)
+  tb.setclosable(() => (cgd ? askclose() : 0, !cgd))
+  tb.on('focus', () => {
+    log(n)
+    // show focus on graph
+  })
+}
+$.opence = ({ o }) => {
+
+}
 
 {
   const t1 = dk.adddock(ve.elm, 'vcs')
+  $.dk2 = false
+  ve.on('boot text editor', opente)
+  ve.on('boot conflict editor', opence)
 }
 
 {
@@ -957,4 +1063,7 @@ document.body.append(sc)
   const c = ve.newver(a).id
   ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
   ve.merge(b, c)
+  ve.togglenodevcs(a)
+  ve.togglenodevcs(b)
+  ve.togglenodevcs(c)
 }

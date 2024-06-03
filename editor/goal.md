@@ -23,9 +23,13 @@
 - [x] dealing with overlap write
 - [x] better node click detection (allow small dragging amount)
 - [ ] git editor ui
+  - [ ] set camera home position
+  - [ ] new version
+  - [ ] new file/dir/link
 - [ ] change file overwrite behaviour
 - [x] docking system
   - [x] many many small issue
   - [x] simplify container tree
   - [x] resizing bar
-  - [ ] lots of bugs remaining...
+  - [ ] redesign panel resizing mechanism
+  - [ ] last active panel
