@@ -1,35 +1,45 @@
 - [x] hash file
 - [x] diff
-- [ ] merge
+- [x] merge
   - [x] least common sequence
   - [x] diff3
   - [x] least common ancestor
-  - [ ] conflit solver
   - [x] create wait-to-solve version
-  - [ ] apply solve
-- [ ] text editor tab
+- [x] text editor tab
 - [x] version graph and file explorer
 - [x] fade in/out animation for graph node
 - [x] fade in/out physics
-- [ ] record open state in git graph
-- [ ] serialization
-- [ ] save file to disk
 - [x] reformat giteditor to extend git object
-- [ ] soft link in graph layout
 - [x] color pallette
-- [ ] folder open/close identifier
 - [x] lock previous version
-- [ ] prevent wirte for locked version
 - [x] dealing with overlap write
 - [x] better node click detection (allow small dragging amount)
-- [ ] git editor ui
-  - [ ] set camera home position
-  - [ ] new version
-  - [ ] new file/dir/link
-- [ ] change file overwrite behaviour
 - [x] docking system
   - [x] many many small issue
   - [x] simplify container tree
   - [x] resizing bar
   - [ ] redesign panel resizing mechanism
   - [ ] last active panel
+- [ ] folder open/close identifier
+- [ ] prevent wirte for locked version
+- [ ] record open state in git graph
+- [ ] serialization
+- [ ] save file to disk
+- [ ] soft link in graph layout
+- [ ] git editor ui
+  - [ ] set camera home position
+  - [ ] new version
+  - [ ] new file/dir/link
+    - [ ] new link version selecion
+- [ ] conflict editor
+  - [ ] show all add delete file
+  - [ ] show conflict file
+- all edtior combined
+  - [x] text editor tab
+  - [x] file modified hint & prevent close
+  - [ ] save file
+  - [ ] file state link to tab
+    - [ ] file delete
+    - [ ] focus on file tab make cvs highlight file node
+    - [ ] click on tab content also has the above behavior
+- [ ] change file overwrite behaviour
