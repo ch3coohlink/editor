@@ -260,4 +260,701 @@
 .no-scroll-bar::-webkit-scrollbar { 
   display: none;  /* Safari and Chrome */
 }`; document.head.append(s)
+} { // docker system ----------------------------------------------------------
+  $.splitctn = ($ = dom()) => {
+    with ($) {
+      $.arr = []; let df; {
+        className = 'split-container'
+        style.width = style.height = '100%'
+        style.flexBasis = '100%'
+        style.display = 'flex'
+        Object.defineProperty($, 'direction', {
+          set: v => {
+            df = v === 'vertical'
+            style.flexDirection = df ? 'column' : 'row'
+            let c = dcstr(); for (const e of children)
+              if (dragbar.is(e)) { e.style.cursor = c }
+          }, get: () => df ? 'vertical' : 'horizontal',
+        })
+      } Object.defineProperty($, 'size', { get: () => arr.length })
+      const dcstr = () => (df ? 'ns' : 'ew') + '-resize'
+      const dragbar = () => {
+        const d = dom(); {
+          d.className = 'dragbar'
+          d.style.flexBasis = '2px'
+          d.style.flexShrink = '0'
+          d.style.background = '#c9c9c9'
+          d.style.userSelect = 'none'
+          d.style.cursor = dcstr()
+        }
+        listenpointerdown(d, e => {
+          const c = [...children]
+          const i = c.indexOf(d)
+          const a = c[i - 1], b = c[i + 1]
+          const ab = a.getBoundingClientRect()
+          const bb = b.getBoundingClientRect()
+          const cb = d.getBoundingClientRect()
+          const m = e => {
+            const p = geteventlocation(e)
+            let r; if (df) {
+              r = (p.y - ab.top) / (ab.height + bb.height + cb.height)
+            } else {
+              r = (p.x - ab.left) / (ab.width + bb.width + cb.width)
+            }
+            a.style.flexBasis = (clamp(r, 0, 1) * 100).toFixed(0) + '%'
+            b.style.flexBasis = ((1 - clamp(r, 0, 1)) * 100).toFixed(0) + '%'
+          }
+          listenpointermove(m); listenpointerup(() => cancelpointermove(m))
+        })
+        return d
+      }, del = () => splitctn.is(parentNode) ?
+        parentNode.delitem($) : $.remove()
+      dragbar.is = n => n.classList.contains('dragbar')
+      $.update = () => {
+        $.innerHTML = ''; let a = [], l = arr.length - 1
+        if (l < 0) { return } for (let i = 0; i < l; i++) {
+          a.push(arr[i], dragbar())
+        } a.push(arr[l]); $.append(...a)
+        arr.forEach(e => e.style.flexBasis = '100%')
+      }
+      $.getindex = e => arr.indexOf(e)
+      $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
+      $.rplitem = (a, b, i = arr.indexOf(a)) => i >= 0
+        ? (delitem(a), additem(b, i)) : 0
+      $.delitem = (e, i = getindex(e)) => {
+        if (i >= 0) { arr.splice(i, 1), update() }
+        else return; if (size === 0) { del() }
+      }
+      direction = 'vertical'
+    } return $
+  }; splitctn.is = n => n.classList.contains('split-container')
+  $.docking = ($ = dom()) => {
+    with ($) {
+      { // style ----------------------------------------------------------------
+        className = 'docking'
+        style.display = 'flex'
+        style.flexBasis = '100%'
+        style.flexDirection = 'column'
+        style.overflow = 'hidden'
+        style.position = 'relative'
+      } $.tabs = dom(); {
+        tabs.className = 'tab-list'
+        tabs.style.height = '30px'
+        tabs.style.background = '#00000010'
+        tabs.style.borderBottom = '1px solid #c9c9c9'
+        tabs.style.display = 'flex'
+        tabs.style.flexShrink = '0'
+        tabs.style.alignItems = 'center'
+        tabs.style.overflow = 'hidden'
+        tabs.style.overflowX = 'auto'
+        tabs.style.userSelect = 'none'
+        tabs.classList.add('no-scroll-bar')
+      } $.ctn = dom(); {
+        ctn.className = 'tab-content'
+        ctn.style.overflow = 'hidden'
+        ctn.style.height = '100%'
+      } $.idf = dom(); { // identifier ------------------------------------------
+        idf.className = 'position-identifier'
+        idf.style.position = 'absolute'
+        idf.style.zIndex = '100'
+        idf.style.transition = 'all 0.1s'
+        idf.style.pointerEvents = 'none'
+        $.setidf = (x, y, w, h, c = '#006eff75') => {
+          idf.style.background = c
+          idf.style.left = x + 'px'
+          idf.style.top = y + 'px'
+          idf.style.width = w + 'px'
+          idf.style.height = h + 'px'
+        }, $.hideidf = () => {
+          idf.style.background = 'transparent'
+        }, hideidf(), $.idfonte = (e, te) => {
+          if (!isdgo(e)) { return } e.preventDefault()
+          const pb = $.getBoundingClientRect()
+          const b = te.getBoundingClientRect()
+          const p = geteventlocation(e), w = 2, w2 = w * 2
+          let x = p.x < b.left + b.width / 2 ? b.left : b.right
+          x = x - pb.left - w; if (x < 0) { x = 0 }
+          else if (x > pb.width - w2) { x = pb.width - w2 }
+          setidf(x, 0, w2, tabs.clientHeight, '#0047ffd1')
+        }
+      } $.append(tabs, ctn, idf)
+      Object.defineProperty($, 'size', { get: () => tabs.childNodes.length })
+      $.addEventListener('dragleave', e => hideidf())
+      const tabsdrag = (e, l = tabs.children.length) => (l > 0 ?
+        idfonte(e, tabs.children[l - 1]) : hideidf())
+      tabs.addEventListener('dragenter', tabsdrag)
+      tabs.addEventListener('dragover', tabsdrag)
+      tabs.addEventListener('drop', (e, l = tabs.children.length) =>
+        (hideidf(), l > 0 ? dropontab(e, tabs.children[l - 1]) : 0))
+      const dataslot = 'd9si2kdcf1/docking-tabs-id'
+      const { abs, min } = Math, calsplit = e => {
+        const b = $.getBoundingClientRect()
+        const p = geteventlocation(e)
+        const w = b.width, h = b.height
+        const x = p.x - b.left, y = p.y - b.top
+        const dx = min(x, w - x), dy = min(y, h - y)
+        if (dx > w / 4 && dy > h / 4) { return 'mid' }
+        const r = h / w, fa = y > x * r, fb = y > (w - x) * r
+        if (!fa && !fb) { return 'top' }
+        else if (fa && !fb) { return 'left' }
+        else if (!fa && fb) { return 'right' }
+        else if (fa && fb) { return 'bottom' }
+      }, ctndg = e => {
+        if (!isdgo(e)) { return } e.preventDefault()
+        const b = $.getBoundingClientRect()
+        const w = b.width, h = b.height
+        switch (calsplit(e)) {
+          case 'mid': setidf(0, 0, w, h); break;
+          case 'top': setidf(0, 0, w, h / 2); break;
+          case 'left': setidf(0, 0, w / 2, h); break;
+          case 'right': setidf(w / 2, 0, w / 2, h); break;
+          case 'bottom': setidf(0, h / 2, w, h / 2); break;
+        }
+      }, isdgo = e => e.dataTransfer.types.includes(dataslot)
+      const getdgo = (e, r = e.dataTransfer.getData(dataslot)) =>
+        r ? r = document.getElementById(r) : undefined
+      ctn.addEventListener('dragenter', ctndg)
+      ctn.addEventListener('dragover', ctndg)
+      ctn.addEventListener('drop', e => {
+        hideidf(); let r = getdgo(e); if (!r) { return }
+        if (r.cp() === $ && size === 1) { return }
+        split(r, calsplit(e))
+      })
+      $.move = e => { tabs.append(e), focustab(e) }
+      $.focuson = e => (ctn.innerHTML = '', ctn.append(e))
+      $.focustab = te => {
+        [...tabs.children].forEach(e => {
+          e.style.zIndex = 0, e.style.boxShadow = 'black 0 0 10px'
+        }); focuson(te.elm); te.style.zIndex = 1
+        te.style.boxShadow = '#009eff 0px 0px 10px 1px'
+      }
+      $.dropontab = (e, te) => {
+        hideidf(); let rte = getdgo(e); if (!rte) { return }
+        const tabs = te.parentNode, sp = rte.parentNode === tabs
+        if (!sp) { rte.undock() }
+        let a = [...tabs.children], i = a.indexOf(te)
+        const b = te.getBoundingClientRect()
+        const p = geteventlocation(e)
+        i += p.x < b.left + b.width / 2 ? 0 : 1
+        sp && i > a.indexOf(rte) ? i -= 1 : 0
+        dsplice(tabs, i, 0, rte), focustab(rte)
+        docksys.emit('layout change')
+      }
+      $.split = (te, d) => {
+        let s = (o, d = 'horizontal') => {
+          let pt = parentNode; dk = docking()
+          if (pt.size > 1 && pt.direction !== d) { pt = makecontain() }
+          pt.additem(dk, pt.getindex($) + o), pt.direction = d
+        }, dk = $; te.undock(); switch (d) {
+          case 'top': s(0, 'vertical'); break;
+          case 'left': s(0); break;
+          case 'right': s(1); break;
+          case 'bottom': s(1, 'vertical'); break;
+        } dk.move(te); docksys.emit('layout change'); return dk
+      }
+      $.adddock = (e, t) => {
+        let te = dom(); if (typeof t === 'string') {
+          te.innerText = t
+        } else { te.append(t) } {
+          te.classList = 'single-tab'
+          te.style.width = '100px'
+          te.style.boxSizing = 'border-box'
+          te.style.height = '100%'
+          te.style.padding = '5px'
+          te.style.background = '#e0e0e0'
+          te.style.boxShadow = 'black 0 0 10px'
+          te.style.userSelect = 'none'
+          te.style.cursor = 'move'
+        } tabs.append(te), te.elm = e, te.id = uuid()
+        let cp = () => te.parentNode.parentNode; te.cp = cp
+        te.addEventListener('drop', e => (
+          e.stopImmediatePropagation(), cp().dropontab(e, te)))
+        te.addEventListener('dragstart', e =>
+        (e.dataTransfer.setData(dataslot, te.id),
+          e.dataTransfer.setDragImage(te, 0, 0)))
+        let dg = e => (cp().idfonte(e, te),
+          isdgo(e) ? e.stopImmediatePropagation() : 0)
+        te.addEventListener('dragenter', dg)
+        te.addEventListener('dragover', dg)
+        te.draggable = true; cp().focustab(te)
+        listenpointerdown(te, e => { cp().focustab(te) })
+        te.undock = () => cp().deldock(te); return te
+      }
+      $.deldock = (te, e = (te.remove(), tabs.children[tabs.children
+        .length - 1])) => e ? focustab(e) : parentNode.delitem($)
+      $.makecontain = (p = splitctn()) => (
+        parentNode.rplitem($, p), p.additem($), p)
+    } return $
+  }
+  $.docksys = eventnode()
+  docksys.on('layout change', () => {
+    let tree = (c, a = []) => {
+      if (!a.direction) { a.direction = c.direction }
+      for (const e of c.arr) {
+        if (splitctn.is(e)) {
+          if (e.size === 1) { tree(e, a) }
+          else if (e.direction === c.direction) { tree(e, a) }
+          else { let t = []; a.push(t); tree(e, t) }
+        } else { a.push(e) }
+      } return a
+    }
+    let build = (a, c = splitctn()) => {
+      c.arr = [], c.direction = a.direction; for (const e of a) {
+        c.arr.push(Array.isArray(e) ? build(e) : e)
+      } c.update(); return c
+    }
+    build(tree(sc), sc)
+  })
+} { // vcs --------------------------------------------------------------------
+  $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
+    with ($) {
+      const nsym = Symbol('name')
+      $.addnode = (id = i++) => {
+        const o = { id, to: {}, from: {}, nto: 0, nfrom: 0, children: {} }
+        Reflect.defineProperty(o, 'name', {
+          get: () => o[nsym], set: v => (o[nsym] = v, emit('namenode', { o }))
+        }); g[id] = o; emit('addnode', { id, o }); return o
+      }
+      $.delnode = (id, n = g[id]) => {
+        for (const k in n.to) { deledge(id, k) }
+        for (const k in n.from) { deledge(k, id) }
+        delete g[id], emit('delnode', { id, o: n })
+      }
+      $.addedge = (a, b, n) => {
+        const o = { o: g[b] }; if (n) { o.name = n, g[a].children[n] = b }
+        g[a].to[b] = o, g[b].from[a] = g[a]
+        g[a].nto++, g[b].nfrom++, emit('addedge', { a, b, o })
+      }
+      $.deledge = (a, b) => {
+        let o = g[a].to[b], n = o.name; if (n) { delete g[a].children[n] }
+        delete g[a].to[b], delete g[b].from[a]
+        g[a].nto--, g[b].nfrom--, emit('deledge', { a, b, o })
+      }
+      $.nameedge = (a, b, n) => (g[a].children[n] = b,
+        g[a].to[b].name = n, emit('nameedge', { o: g[a].to[b] }))
+      $.unnameedge = (a, b, n = g[a].to[b].name) => (delete g[a].children[n],
+        delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
+      $.unnameedgebyname = (a, n, b = g[a].children[n]) => (delete g[a].children[n],
+        delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
+      $.renameedge = (a, n, nn, b = g[a].children[n]) => (delete g[a].children[n],
+        g[a].children[nn] = b, g[a].to[b].name = nn, emit('nameedge', { o: g[a].to[b] }))
+      $.deltree = (n, l = 0, c = g[n].children) => {
+        for (const k in c) { deltree(c[k], l - 1) }
+        if (l <= 0) { delnode(n) }
+      }
+      $.addtonode = (a, name, id, force = false) => {
+        if (!g[a]) { throw `non exist node: ${a}` }
+        const pb = g[a].children[name]
+        if (name !== undefined && pb !== undefined) {
+          if (force) { delnode(pb) }
+          else { throw `edge existed: ${a}:${name}` }
+        } const b = addnode(id); addedge(a, b.id, name)
+        emit('addtonode', { o: b }); return b
+      }
+      $.clear = () => (g = {}, emit('clear'))
+    } return $
+  }
+
+  $.vcs = ($ = graph()) => {
+    with ($) {
+      $.locatebypath = (node, path = '') => {
+        if (!Array.isArray(path)) { path = path.split('/') }
+        let n = node, name; while (path.length > 0) {
+          let t = g[n].type
+          if (t === 'link') { n = g[n].value }
+          name = path.shift(); if (name === '.') { continue }
+          else if (name === '..') {
+            if (n.nfrom !== 1) { throw `invalid path: ${path}` }
+            n = n.from[Object.keys(n.from)[0]]
+          } else {
+            n = g[n].children[name]
+            if (!n) { throw `invalid path: ${path}` }
+          }
+        } return n
+      }
+      $.read = (ver, path) => {
+        const n = locatebypath(ver, path)
+        const value = g[n].value, type = g[n].type
+        if (type === 'file') { return g[value].value }
+        else if (type === 'link') { return { type, value } }
+        else if (type === 'dir') { return { type, id: n } }
+      }
+      $.addhashobj = (h, t) => {
+        const o = addnode(h); o.type = 'hashobj', o.value = t
+      }
+      // TODO: change overwrite behaviour
+      $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
+        const b = addtonode(loc, name, _, force)
+        if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
+        b.type = 'file', b.value = h; return b
+      }
+      $.writedir = (loc, name, force) => {
+        const b = addtonode(loc, name, _, force)
+        b.type = 'dir'; return b
+      }
+      $.writelink = (loc, name, ref, force) => {
+        const b = addtonode(loc, name, _, force)
+        b.type = 'link', b.value = ref; return b
+      }
+      const copytree = (a, b) => {
+        const c = g[a].children
+        for (const t in c) {
+          const edge = g[a].to[c[t]]
+          const o = edge.o
+          const target = addtonode(b, edge.name)
+          target.type = o.type
+          if (o.type === 'file') {
+            addedge(target.id, target.value = o.value)
+          } else if (o.type === 'link') {
+            target.value = o.value
+          } else if (o.type === 'dir') {
+            copytree(c[t], target.id)
+          }
+        }
+      }
+      $.newver = (p, b = p !== undefined) => {
+        if (b && g[p] && g[p].type !== 'version') {
+          throw `privous node is not a vcs version: ${p}`
+        } if (b) { o = addtonode(p) } else { o = addnode() }
+        o.type = 'version', o.verid = uuid()
+        if (b) { copytree(p, o.id), g[p].lock = true }
+        emit('newver', { p, pb: b, o }); return o
+      }
+      $.nodeancester = n => {
+        let a = new Set, q = [], c = g[n]; while (c.nfrom > 0) {
+          for (const k in c.from) if (!a.has(k))
+            (a.add(k), q.push(g[k])); c = q.shift()
+        } return a
+      }
+      $.lcas = (a, b) => { // least common ancestors
+        const aa = nodeancester(a), ba = nodeancester(b)
+        const ca = aa.intersection(ba), da = new Set(ca)
+        for (const a of ca) for (const k in g[a].from)
+          da.delete(k); return da
+      }
+      const dfobj = (a, b, r, t = 2) => ({ type: t, a: a.id, b: b.id, r })
+      $.diffver = (a, b, o, path, r) => {
+        r = r ?? { add: new Set, del: new Set, mod: new Map }
+        const ac = new Set(Object.keys(a.children))
+        const bc = new Set(Object.keys(b.children))
+        const ps = !path ? '' : path + '/'
+        const ff = a => n => pf(ps + n, g[a.children[n]])
+        const pf = (p, f) => p + (f.type === 'dir' ? '/' : '')
+        r.del = r.del.union(new Set([...ac.difference(bc)].map(ff(a))))
+        r.add = r.add.union(new Set([...bc.difference(ac)].map(ff(b))))
+        const cc = ac.intersection(bc), { del, add, mod } = r
+        for (let name of cc) {
+          const fa = g[a.children[name]], fb = g[b.children[name]]
+          const fo = o ? g[o.children[name]] : undefined
+          let p = ps + name; if (fa.type === fb.type) {
+            if (fa.type === 'file' && fa.value !== fb.value) {
+              const at = g[fa.value].value.split('\n')
+              const bt = g[fb.value].value.split('\n')
+              if (fo && fo.type === 'file') {
+                const ot = g[fo.value].value.split('\n')
+                mod.set(p, dfobj(a, b, diff3(at, ot, bt), 3))
+              } else { mod.set(p, dfobj(a, b, diff(at, bt))) }
+            } if (fa.type === 'link' && fa.value !== fb.value) (del.add(p), add.add(p))
+            if (fa.type === 'dir') { diffver(fa, fb, fo, p, r) }
+          } else (del.add(pf(p, fa)), add.add(pf(p, fa)))
+        } return r
+      }
+      $.merge = (a, b) => {
+        if (!g[a]) { throw `non exist node: ${a}` }
+        if (!g[b]) { throw `non exist node: ${b}` }
+        let os = [...lcas(a, b)], o = os[0] // TODO: multi ancester merge
+        const r = diffver(g[a], g[b], g[o])
+        const m = addtonode(a); addedge(b, m.id)
+        m.verid = uuid(), m.type = 'mergever', m.value = r
+        emit('merge', { a, b, o: m })
+      }
+      $.writedes = (ver, text) => { g[ver].description = text }
+      $.readdes = ver => delete g[ver].description
+    } return $
+  }
+
+  $.graphlayout = ($ = graph()) => {
+    with ($) {
+      on('addnode', ({ o }) => newpos(newnodeelm(o)))
+      on('delnode', ({ o }) => delnodeelm(o))
+      on('addedge', ({ o }) => newedgeelm(o))
+      on('deledge', ({ o }) => deledgeelm(o))
+      on('namenode', ({ o }) => namenodeelm(o))
+      on('nameedge', ({ o }) => nameedgeelm(o))
+      on('clear', () => sep.innerHTML = sen.innerHTML = '')
+      on('addtonode', ({ o }) => {
+        const p = o.from[Object.keys(o.from)[0]]
+        o.data.pos.x = p.data.pos.y + rd(-1, 1) * target_length * 0.1
+        o.data.pos.y = p.data.pos.y + rd(-1, 1) * target_length * 0.1
+      })
+
+      $.pending = []; $.makepending = f => (...a) => pending.push([f, a])
+      $.namenodeelm = makepending((n, t = n.elm.text, b = t.getBBox()) => (
+        t.textContent = n.name, t.setAttribute('transform',
+          `translate(-${b.width / 2}, -${b.height * 0.9})`)))
+      $.nameedgeelm = c => c.elm.text.textContent = c.name
+      $.newnodeelm = n => {
+        setvaluebytime(v => (n.elm.style.opacity = v,
+          n.data.ecc = v === 0 ? 0.0001 : v, stop = false))
+        const g = svg('g'), c = svg('circle'), t = svg('text')
+        namenodeelm(n)
+        g.text = t, g.path = c
+        g.append(c, t), sen.append(g)
+        c.setAttribute('r', circlesize + 'px')
+        t.setAttribute('fill', 'white')
+        t.setAttribute('stroke', forecolor)
+        t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
+        t.setAttribute('font-size', circlesize + 'px')
+        listenpointerdown(c, e => {
+          if (e.target !== c) { return }
+          let sp = geteventlocation(e) // start position
+          let moveed = false, m = e => {
+            if (e.touches && e.touches.length > 1) { return } reset()
+            const cp = geteventlocation(e)
+            const { x, y } = screen2svgcoord()(...cp)
+            n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+            moveed = (cp[0] - sp[0]) ** 2 + (cp[1] - sp[1]) ** 2 > 100
+          }; listenpointermove(m), listenpointerup(() => (
+            moveed ? 0 : emit('nodeclick', { o: n }),
+            delete n.data.lock, cancelpointermove(m)))
+        }); n.elm = g; return n
+      }
+      $.newedgeelm = o => {
+        setvaluebytime(v => (o.elm.style.opacity = v, stop = false))
+        const g = svg('g'), p = svg('path'), t = svg('text')
+        const c = o, n = c.name
+        t.setAttribute('fill', forecolor)
+        t.setAttribute('stroke', 'white')
+        t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
+        t.setAttribute('font-size', circlesize + 'px')
+        if (n) { t.textContent = n }
+        c.elm = g, g.path = p; g.text = t
+        g.append(p, t), sep.append(g)
+      }
+      $.delnodeelm = n => setvaluebytime(v => (
+        v = 1 - v, n.elm.style.opacity = v, stop = false,
+        n.data.ecc = v), () => n.elm.remove())
+      $.deledgeelm = n => setvaluebytime(v => (v = 1 - v,
+        n.elm.style.opacity = v, stop = false), () => n.elm.remove())
+
+      $.rd = genrd(795304884).rd
+      $.newpos = (n, x = rd(-1, 1) * target_length,
+        y = rd(-1, 1) * target_length) => {
+        if (!n.data) { n.data = {} } const d = n.data
+        d.pos = { x, y }, d.vec = { x: 0, y: 0 }, d.acc = { x: 0, y: 0 }
+        d.mat = 1, d.ecc = 1; return n
+      }
+      const { sqrt, max, min, sign, abs } = Math
+      const gravity = newpos({ data: {} }, 0, 0)
+      $.layout = ns => {
+        const electric = (b, p, ad, ap, m = 1) => {
+          const bd = b.data, bp = bd.pos
+          const pdx = bp.x - ap.x, pdy = bp.y - ap.y
+          const lsq = max(pdx * pdx + pdy * pdy, m), l = sqrt(lsq)
+          const f = ad.ecc * bd.ecc / lsq * p / l
+          const fx = f * pdx, fy = f * pdy
+          ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
+          bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
+        }, distance = (b, p, ad, ap) => {
+          const bd = b.data, bp = bd.pos
+          const pdx = bp.x - ap.x, pdy = bp.y - ap.y
+          p *= ad.ecc * bd.ecc
+          const fx = p * pdx, fy = p * pdy
+          ad.acc.x += fx / ad.mat, ad.acc.y += fy / ad.mat
+          bd.acc.x -= fx / bd.mat, bd.acc.y -= fy / bd.mat
+        }; total_speed = 0
+        let tl = target_length, ts = target_length * 2, dt = 0.05
+        let ep = -(tl ** 2) * ts, ed = 1 / tl * ts * 20
+        for (let i = 0, l = ns.length; i < l; i++) {
+          const a = ns[i], ad = a.data, ap = ad.pos
+          for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
+          for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
+          if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
+          distance(gravity, 0.05 * ed, ad, ap)
+          let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
+          let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
+          total_speed += v = max(min(v, ts) - ts * friction, 0)
+          ad.vec.x = vx = v * vrx, ad.vec.y = vy = v * vry
+          if (ad.lock) { ad.vec.x = ad.vec.y = 0; continue }
+          ap.x += vx * dt, ap.y += vy * dt
+          ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
+        } layouttime += time.realdelta
+      }
+      $.circlesize = 15, $.linewidth = circlesize / 7
+      $.target_length = circlesize * 10, $.friction = 0.01
+      $.forecolor = '#444'
+      $.draw = ns => {
+        const w = se.clientWidth, h = se.clientHeight
+        const x = w / 2 + camera.x, y = h / 2 + camera.y
+        const transtr = `translate(${sorigin.x}, ${sorigin.y}) ` +
+          `scale(${camera.s}) translate(${x}, ${y})`
+        sep.setAttribute('transform', transtr)
+        sep.setAttribute('fill', 'none')
+        sep.setAttribute('stroke', forecolor)
+        sep.setAttribute('stroke-width', linewidth + 'px')
+        sep.setAttribute('stroke-linecap', 'round')
+        sen.setAttribute('transform', transtr)
+        if (stop) { return } for (const n of ns) {
+          const { x, y } = n.data.pos, e = n.elm
+          e.setAttribute('transform', `translate(${x}, ${y})`)
+          for (const k in n.to) {
+            const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = circlesize / 7 * 2
+            if (b.o === n) {
+              const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
+              e.path.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
+                `a ${r},${r} 0 1,0 ${-r2}, 0 a ${r},${r} 0 1,0 ${r2}, 0 ` +
+                `M ${x + r2 + c} ${y + c} L ${x + r2} ${y} L ${x + r2 - c} ${y + c}`)
+              e.text.setAttribute('transform', `translate(${x + r2} ${y})`)
+            } else {
+              let dx = bp.x - x, dy = bp.y - y, s = 0.6, c = arws
+              let mx = x + dx * 0.5, my = y + dy * 0.5
+              mx = x + dx * s, my = y + dy * s
+              e.text.setAttribute('transform', `translate(${mx}, ${my})`)
+              let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
+              e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+                `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+            }
+          }
+        }
+      }
+      $.stop = false, $.layouttime = 0, $.multirun = 4
+      $.total_speed = 0, $.total_accelaration = 0
+      $.frame = () => {
+        const ns = [], es = []; for (const k in g) {
+          const n = g[k]; ns.push(n); const e = []
+          for (const id in n.to) { e.push(n, n.to[id].o) } es.push(e)
+        } if (!stop) {
+          for (let i = 0; i < multirun; i++) { layout(ns) }
+          if (total_speed === 0) { emit('layoutend', layouttime), stop = true }
+        } draw(ns); for (const [f, a] of pending) { f(...a) } pending = []
+      }
+      $.reset = () => { stop = false, layouttime = 0 }
+      $.camera = { x: 0, y: 0, s: 1 }
+      $.sorigin = { x: 0, y: 0 } // scale origin
+      $.screen2svgcoord = (c = camera) => (x, y) => {
+        const w = se.clientWidth, h = se.clientHeight
+        x = (x - sorigin.x) / camera.s - (c.x + w / 2)
+        y = (y - sorigin.y) / camera.s - (c.y + h / 2)
+        return { x, y }
+      }
+      $.se = svg('svg'); se.style.display = 'block'
+      se.style.filter = 'drop-shadow(#777 0px 4px 6px)'
+      se.style.userSelect = se.style.touchAction = 'none'
+      se.style.height = se.style.width = '100%'
+      $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen)
+      listenpointerdown(se, e => {
+        if (e.target !== se) { return }
+        const c = { ...camera }, s = screen2svgcoord(c)
+        const o = s(...geteventlocation(e)), m = e => {
+          if (e.touches && e.touches.length > 2) { return emit('3finger', e) }
+          if (e.touches && e.touches.length === 2) { return pinch(e) }
+          const { x, y } = s(...geteventlocation(e))
+          camera.x = c.x + x - o.x, camera.y = c.y + y - o.y
+        }; listenpointermove(m), listenpointerup(() => (
+          lpd = null, cancelpointermove(m)))
+      }) // last pinch distance
+      $.lpd = null, $.pinch = (e, et = e.touches) => {
+        const { left: l, top: t } = se.getBoundingClientRect()
+        let a = { x: et[0].pageX - l, y: et[0].pageY - t }
+        let b = { x: et[1].pageX - l, y: et[1].pageY - t }
+        let d = Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2)
+        if (d === lpd) { return } if (lpd === null) { lpd = d }
+        zoom([(a.x + b.x) / 2, (a.y + b.y) / 2], d / lpd); lpd = d
+      }
+      se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
+        ? zoom(geteventlocation(e), r) : zoom(geteventlocation(e), 1 / r))
+      $.zoom = ([x, y], f, s) => (s = camera.s,
+        camera.s = s * f, f = camera.s / s,
+        sorigin.x = x - (x - sorigin.x) * f,
+        sorigin.y = y - (y - sorigin.y) * f)
+      $.geteventlocation = (e, ef = e.touches) => {
+        const { left: l, top: t } = se.getBoundingClientRect()
+        return ef && ef.length == 1 ?
+          [ef[0].pageX - l, ef[0].pageY - t] : [e.pageX - l, e.pageY - t]
+      }
+    } return $
+  }
+
+  $.bimap = ($ = { am: new Map, bm: new Map }) => {
+    with ($) {
+      $.set = (a, b) => (am.set(a, b), bm.set(b, a))
+      $.get = a => am.get(a), $.getr = b => bm.get(b)
+      $.del = a => am.delete(a), $.delr = b => bm.delete(b)
+    } return $
+  }
+
+  $.vcseditor = ($ = vcs()) => {
+    with ($) {
+      $.vg = graphlayout(), $.nodemap = bimap()
+      vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
+      vg.on('nodeclick', ({ o }) => {
+        if (o.type === 'file') { log(g[g[nodemap.getr(o.id)].value].value) }
+        if (o.type === 'mergever') { log(g[nodemap.getr(o.id)].value) }
+        togglenode(o)
+      })
+      on('merge', ({ a, b, o }) => {
+        const n = vg.addtonode(nodemap.get(a))
+        vg.addedge(nodemap.get(b), n.id)
+        n.name = o.verid.slice(0, 8)
+        n.open = false; n.type = o.type
+        emit('add visual node', { n, o })
+      })
+      on('add visual node', ({ n, o }) => (nodemap.set(o.id, n.id), setnodecolor(n)))
+      on('newver', ({ p, pb, o }) => {
+        const n = pb ? vg.addtonode(nodemap.get(p)) : vg.addnode()
+        n.name = o.verid.slice(0, 8)
+        n.open = false; n.type = pb ? 'version' : 'rootver'
+        emit('add visual node', { n, o })
+      }); $.frame = vg.frame
+      $.togglenodevcs = id => togglenode(vg.g[nodemap.get(id)])
+      $.togglenode = n => {
+        n.open = !n.open
+        if (!n.open) { vg.deltree(n.id, 1) }
+        else {
+          const o = g[nodemap.getr(n.id)]
+          const c = o.children
+          for (const t in c) {
+            const edge = o.to[c[t]]
+            const e = vg.addtonode(n.id, edge.name)
+            e.type = edge.o.type
+            if (e.type === 'link') {
+              e.name = edge.name + ' | ' + g[edge.o.value].verid.slice(0, 8)
+            } else { e.name = edge.name }
+            nodemap.set(edge.o.id, e.id)
+            setnodecolor(e)
+          } vg.reset()
+        }
+      }
+      $.setnodecolor = n => n.elm.path.setAttribute('fill', {
+        rootver: '#f47771', version: '#83c1bc', mergever: '#de57dc',
+        dir: '#fbc85f', link: '#8e4483', file: '#2b5968',
+      }[n.type])
+      Object.defineProperty($, 'elm', { get: () => vg.se })
+    } return $
+  }
+
+}
+
+$.ve = vcseditor()
+listenframe(() => ve.frame())
+
+$.sc = splitctn()
+$.dk = docking()
+sc.additem(dk)
+document.body.append(sc)
+
+{
+  const t1 = dk.adddock(ve.elm, 'vcs')
+}
+
+{
+  const a = ve.newver().id
+  ve.writefile(a, 'a.js', 'aaa\nbbb\nccc')
+  const b = ve.newver(a).id
+  ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
+  ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
+  ve.writedir(b, 'b')
+  const c = ve.newver(a).id
+  ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
+  ve.merge(b, c)
 }
