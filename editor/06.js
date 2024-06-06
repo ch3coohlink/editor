@@ -704,9 +704,9 @@ $.grapheditor = ($ = { g: graph(), gdb: graphdb() }) => {
 }
 
 {
-  nextseed(124759)
+  // nextseed(124759)
   // nextseed(934502730)
-  const { floor, abs } = Math, ids = [], g = gdb, l = 25
+  const { floor, abs } = Math, ids = [], g = gdb, l = floor(rd(25, 100))
   for (let i = 0; i < l; i++) ids.push([await g.addnode(), ge.g.addnode()])
   for (let i = 0; i < l; i++) {
     let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
