@@ -1028,7 +1028,7 @@
 
 
 {
-  // nextseed(23590402)
+  nextseed(13590402)
   const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 50)
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
   for (let i = 0; i < l; i++) {
@@ -1048,8 +1048,9 @@
     let sn = new Set, q = [[id, 0]]; while (q.length > 0) {
       const [i, d] = q.shift(); if (!sn.has(i)) {
         sn.add(i); const n = g.g[i]
-        for (const k in n.to) { q.push([k, d + 1]) }
-        for (const k in n.from) { q.push([k, d - 1]) }
+        const to = Object.keys(n.to), fr = Object.keys(n.from)
+        while (to.length > 0) { q.push([to.splice(rdi(to.length), 1)[0], d + 1]) }
+        while (fr.length > 0) { q.push([fr.splice(rdi(fr.length), 1)[0], d - 1]) }
         const t = d / (3 * 2); n.data.hierarchy = t
         const cl = itp3([256, 0, 0], [0, 0, 256], t + 0.5)
         n.elm.path.setAttribute('fill', `rgb(${cl.join(', ')})`)
