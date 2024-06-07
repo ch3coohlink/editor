@@ -783,10 +783,10 @@
           for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
           for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
           if ('hierarchy' in ad) {
-            if (a === currenthignlight) { ad.vec.x = ad.vec.y = 0; continue }
+            // if (a === currenthignlight) { ad.vec.x = ad.vec.y = 0; continue }
             ad.acc.y += ad.hierarchy * tl * 20
-            distance(currenthignlight, 0.05 * ed, ad, ap)
-          } else { distance(gravity, 0.05 * ed, ad, ap) }
+            // distance(currenthignlight, 0.01 * ed, ad, ap)
+          } distance(gravity, 0.05 * ed, ad, ap)
           if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
           let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
           let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
@@ -797,7 +797,7 @@
           ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
         } layouttime += time.realdelta
       }
-      $.circlesize = 15, $.linewidth = circlesize / 7
+      $.circlesize = 5, $.linewidth = circlesize / 7
       $.target_length = circlesize * 10, $.friction = 0.01
       $.forecolor = '#444'
       $.draw = ns => {
@@ -1028,11 +1028,13 @@
 
 
 {
-  nextseed(13590402)
-  const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 50)
+  // nextseed(13590402) // star
+  nextseed(1418393879) // crash
+  const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 200)
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
   for (let i = 0; i < l; i++) {
     let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
+    // let r = rd() > 0.999 ? 100 : rd() > 0.9 ? 2 : 1
     const a = ids[i], s = [...ids]
     for (let j = 0; j < r && s.length > 0; j++) {
       g.addedge(a, s.splice(rdi(s.length), 1)[0])
@@ -1045,20 +1047,42 @@
     [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])])
   const hl = id => {
     g.highlight(g.g[id])
-    let sn = new Set, q = [[id, 0]]; while (q.length > 0) {
-      const [i, d] = q.shift(); if (!sn.has(i)) {
-        sn.add(i); const n = g.g[i]
-        const to = Object.keys(n.to), fr = Object.keys(n.from)
-        while (to.length > 0) { q.push([to.splice(rdi(to.length), 1)[0], d + 1]) }
-        while (fr.length > 0) { q.push([fr.splice(rdi(fr.length), 1)[0], d - 1]) }
-        const t = d / (3 * 2); n.data.hierarchy = t
-        const cl = itp3([256, 0, 0], [0, 0, 256], t + 0.5)
-        n.elm.path.setAttribute('fill', `rgb(${cl.join(', ')})`)
+
+    for (const i in g.g) { g.g[i].data.hierarchy = 0 }
+
+    const loop = 1000
+    for (let j = 0; j < loop; j++) {
+      let sn = new Set, q = [[id, 0]]; while (q.length > 0) {
+        const [i, d] = q.splice(rdi(q.length), 1)[0]; if (!sn.has(i)) {
+          sn.add(i); const n = g.g[i]
+          q.push(...Object.keys(n.to).map(v => [v, d + 1]))
+          q.push(...Object.keys(n.from).map(v => [v, d - 1]))
+          n.data.hierarchy += d
+        }
       }
-    } g.reset()
+    }
+
+    const { min, max } = Math
+    let l = -Infinity, s = Infinity
+    for (const i in g.g) {
+      const n = g.g[i]
+      n.data.hierarchy = (n.data.hierarchy / loop)
+      // + n.nfrom - n.nto
+      l = max(l, n.data.hierarchy)
+      s = min(s, n.data.hierarchy)
+    }
+
+    for (const i in g.g) {
+      const n = g.g[i]
+      const t = (n.data.hierarchy - s) / (l - s)
+      n.data.hierarchy = t * 2 - 1
+      const cl = itp3([256, 0, 0], [0, 0, 256], t)
+      n.elm.path.setAttribute('fill', `rgb(${cl.join(', ')})`)
+    }
+
+    g.reset()
     // g.g[id].data.pos.x = g.g[id].data.pos.y = 0
   }
-  log(g.g)
   g.on('nodeclick', ({ o }) => hl(o.id))
-  hl(5)
+  // hl(5)
 }
