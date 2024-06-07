@@ -1029,7 +1029,11 @@
 
 {
   // nextseed(13590402) // star
+  // nextseed(3377526847) // double star!!
+  // nextseed(37854935) // a beautiful example
+  // nextseed(3340199483) // flower
   // nextseed(1418393879) // crash
+  log(gseed)
   const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 200)
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
   for (let i = 0; i < l; i++) {
