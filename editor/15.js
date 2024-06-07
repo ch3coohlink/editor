@@ -1038,7 +1038,8 @@
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
   for (let i = 0; i < l; i++) {
     // let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
-    let r = rd() > 0.999 ? 100 : rd() > 0.9 ? 2 : 1
+    // let r = rd() > 0.999 ? 100 : rd() > 0.9 ? 2 : 1
+    let r = rd() > 0.9 ? 2 : 1
     const a = ids[i], s = [...ids]
     for (let j = 0; j < r && s.length > 0; j++) {
       g.addedge(a, s.splice(rdi(s.length), 1)[0])
