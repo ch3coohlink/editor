@@ -1,4 +1,4 @@
-//# sourceURL=7bF10sAz0.js
+
 await require("../common/basic.js")
 const _now = performance.now.bind(performance)
 const now = () => _now() * 0.001

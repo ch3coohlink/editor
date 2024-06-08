@@ -1,5 +1,4 @@
 // 13.js - basic program editor
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined

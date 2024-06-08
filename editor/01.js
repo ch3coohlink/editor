@@ -1,5 +1,4 @@
 // 01.js - utility collection (no executable)
-//# sourceURL=7bF10sAz0.js
 
 { // load monaco editor -------------------------------------------------------
   $.monaco_root = 'common/monaco-editor/min/vs'

@@ -1,5 +1,4 @@
 // 06.js - basic graph editor
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
   $._ = undefined

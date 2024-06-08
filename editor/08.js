@@ -1,5 +1,4 @@
 // 08.js - git editor (deprecated)
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
   $._ = undefined

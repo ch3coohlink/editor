@@ -1,5 +1,4 @@
 // 11.js - docking system
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined

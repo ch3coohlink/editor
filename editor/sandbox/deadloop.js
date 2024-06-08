@@ -1,0 +1,1 @@
+while (true) { log('dead loop') }

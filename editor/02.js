@@ -1,5 +1,4 @@
 // 02.js - basic forced direct graph layout
-//# sourceURL=7bF10sAz0.js
 
 {
   let hexenc = b => [...b].map(v => v.toString(16).padStart(2, '0')).join("")

@@ -156,4 +156,3 @@ svr.handle('receive-webrtc-answer', async o => {
   const u = userlist[o.from]
   if (u) { u.pc.setRemoteDescription(JSON.parse(o.answer)) }
 })
-//# sourceURL=7bF10sAz0.js

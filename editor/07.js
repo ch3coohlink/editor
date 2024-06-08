@@ -1,5 +1,4 @@
 // 07.js - graph editor operation
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ----------------------------------------------------------
   $._ = undefined

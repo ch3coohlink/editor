@@ -14,27 +14,29 @@
     }
   </style>
   <script>
-    window.log = console.log
-    window.dlog = console.dir
-    window.__require = base => async path => {
-      let b = base.split('/'); path = path.split('/'); for (const p of path) {
-        if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
-      } path = b.filter(v => v).join('/'); if (loaded.has(path)) { return }
-      await exec(path, await load(path))
+    let $ = {}; {
+      window.log = console.log
+      window.dlog = console.dir
+      window.__require = base => async path => {
+        let b = base.split('/'); path = path.split('/'); for (const p of path) {
+          if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
+        } path = b.filter(v => v).join('/'); if (loaded.has(path)) { return }
+        await exec(path, await load(path))
+      }
+
+      let loaded = new Set, $ = {}, __AF__ = (async () => { }).constructor
+      const exec = async (path, src) => (loaded.add(path), await (
+        new __AF__('$', `//# sourceURL=${path}\n` +
+          `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
+          `const require = __require(__dirname)\n` + `with($) {\n${src}\n}`)($)))
+
+      let load = path => fetch(path).then(v => v.text())
+
+      const sp = new URLSearchParams(location.search)
+      const initpath = sp.get('load') ?? sp.get('init')
+      document.title = decodeURI(initpath)
+      load(initpath).then(v => exec(initpath, v))
     }
-
-    let loaded = new Set, $ = {}
-    let AsyncFunciton = (async () => { }).constructor
-    const exec = async (path, src) => (loaded.add(path), await (new AsyncFunciton('$',
-      `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
-      `const require = __require(__dirname)\n` + `with($) {\n${src}\n}`)($)))
-
-    let load = path => fetch(path).then(v => v.text())
-
-    const sp = new URLSearchParams(location.search)
-    const initpath = sp.get('load') ?? sp.get('init')
-    document.title = decodeURI(initpath)
-    load(initpath).then(v => exec(initpath, v))
   </script>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1366899940573208"
     crossorigin="anonymous"></script>

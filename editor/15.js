@@ -1,5 +1,4 @@
 // 15.js - hierarchy graph layout
-//# sourceURL=7bF10sAz0.js
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined

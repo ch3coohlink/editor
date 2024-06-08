@@ -1,5 +1,4 @@
 // 03.js - graph layout parameter tweaking
-//# sourceURL=7bF10sAz0.js
 
 { // basic
   let hexenc = b => [...b].map(v => v.toString(16).padStart(2, '0')).join("")

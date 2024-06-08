@@ -1,5 +1,3 @@
-//# sourceURL=7bF10sAz0.js
-
 await require('../common/basic.js')
 
 const { min, max } = Math

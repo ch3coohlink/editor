@@ -1,4 +1,4 @@
-// 14.js - program editor
+// 16.js - editor more
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined
@@ -167,7 +167,7 @@
     $.rd = o.rd, $.gaussian = o.gaussian, $.rdi = o.rdi)
   $.genrd = (seed, _rd = mb32(seed)) => {
     let rd = (a = 1, b) => (b ? 0 : (b = a, a = 0), _rd() * (b - a) + a)
-    let rdi = (a, b) => ceil(rd(a, b))
+    let rdi = (a, b) => floor(rd(a, b))
     let gaussian = (mean = 0, stdev = 1) => {
       let u = 1 - rd(), v = rd()
       let z = sqrt(-2.0 * log(u)) * cos(2.0 * PI * v)
@@ -781,8 +781,12 @@
           const a = ns[i], ad = a.data, ap = ad.pos
           for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
           for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
+          if ('hierarchy' in ad) {
+            // if (a === currenthignlight) { ad.vec.x = ad.vec.y = 0; continue }
+            ad.acc.y += ad.hierarchy * tl * 20
+            // distance(currenthignlight, 0.01 * ed, ad, ap)
+          } distance(gravity, 0.05 * ed, ad, ap)
           if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
-          distance(gravity, 0.05 * ed, ad, ap)
           let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
           let v = sqrt(vx * vx + vy * vy), vrx = vx / v, vry = vy / v
           total_speed += v = max(min(v, ts) - ts * friction, 0)
@@ -792,11 +796,11 @@
           ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
         } layouttime += time.realdelta
       }
-      $.circlesize = 15, $.linewidth = circlesize / 7
+      $.circlesize = 5, $.linewidth = circlesize / 7
       $.target_length = circlesize * 10, $.friction = 0.01
       $.forecolor = '#444'
       $.draw = ns => {
-        const w = se.clientWidth, h = se.clientHeight
+        const w = elm.clientWidth, h = elm.clientHeight
         const x = w / 2 + camera.x, y = h / 2 + camera.y
         const transtr = `translate(${sorigin.x}, ${sorigin.y}) ` +
           `scale(${camera.s}) translate(${x}, ${y})`
@@ -826,36 +830,49 @@
               e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
                 `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
             }
-          }
+          } n.customdraw?.()
         }
       }
       $.stop = false, $.layouttime = 0, $.multirun = 4
       $.total_speed = 0, $.total_accelaration = 0
       $.frame = () => {
-        const ns = [], es = []; for (const k in g) {
+        const ns = []; for (const k in g) {
           const n = g[k]; ns.push(n); const e = []
-          for (const id in n.to) { e.push(n, n.to[id].o) } es.push(e)
+          for (const id in n.to) { e.push(n, n.to[id].o) }
         } if (!stop) {
           for (let i = 0; i < multirun; i++) { layout(ns) }
           if (total_speed === 0) { emit('layoutend', layouttime), stop = true }
         } draw(ns); for (const [f, a] of pending) { f(...a) } pending = []
       }
+      $.currenthignlight = _
+      $.highlight = n => {
+        if (currenthignlight) {
+          currenthignlight.elm.hlelm.remove()
+          delete currenthignlight.elm.hlelm
+        } const c = svg('circle')
+        c.setAttribute('r', circlesize * 1.2 + 'px')
+        c.setAttribute('fill', 'none')
+        c.setAttribute('stroke', '#ff3f3f')
+        c.setAttribute('stroke-width', linewidth + 'px')
+        n.elm.append(n.elm.hlelm = c)
+        currenthignlight = n
+      }
       $.reset = () => { stop = false, layouttime = 0 }
       $.camera = { x: 0, y: 0, s: 1 }
       $.sorigin = { x: 0, y: 0 } // scale origin
       $.screen2svgcoord = (c = camera) => (x, y) => {
-        const w = se.clientWidth, h = se.clientHeight
+        const w = elm.clientWidth, h = elm.clientHeight
         x = (x - sorigin.x) / camera.s - (c.x + w / 2)
         y = (y - sorigin.y) / camera.s - (c.y + h / 2)
         return { x, y }
       }
-      $.se = svg('svg'); se.style.display = 'block'
-      se.style.filter = 'drop-shadow(#777 0px 4px 6px)'
-      se.style.userSelect = se.style.touchAction = 'none'
-      se.style.height = se.style.width = '100%'
-      $.sep = svg('g'), $.sen = svg('g'); se.append(sep, sen)
-      listenpointerdown(se, e => {
-        if (e.target !== se) { return }
+      $.elm = svg('svg'); elm.style.display = 'block'
+      elm.style.filter = 'drop-shadow(#777 0px 4px 6px)'
+      elm.style.userSelect = elm.style.touchAction = 'none'
+      elm.style.height = elm.style.width = '100%'
+      $.sep = svg('g'), $.sen = svg('g'); elm.append(sep, sen)
+      listenpointerdown(elm, e => {
+        if (e.target !== elm) { return }
         const c = { ...camera }, s = screen2svgcoord(c)
         const o = s(...geteventlocation(e)), m = e => {
           if (e.touches && e.touches.length > 2) { return emit('3finger', e) }
@@ -873,14 +890,14 @@
         if (d === lpd) { return } if (lpd === null) { lpd = d }
         zoom([(a.x + b.x) / 2, (a.y + b.y) / 2], d / lpd); lpd = d
       }
-      se.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
+      elm.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
         ? zoom(geteventlocation(e), r) : zoom(geteventlocation(e), 1 / r))
       $.zoom = ([x, y], f, s) => (s = camera.s,
         camera.s = s * f, f = camera.s / s,
         sorigin.x = x - (x - sorigin.x) * f,
         sorigin.y = y - (y - sorigin.y) * f)
       $.geteventlocation = (e, ef = e.touches) => {
-        const { left: l, top: t } = se.getBoundingClientRect()
+        const { left: l, top: t } = elm.getBoundingClientRect()
         return ef && ef.length == 1 ?
           [ef[0].pageX - l, ef[0].pageY - t] : [e.pageX - l, e.pageY - t]
       }
@@ -946,7 +963,7 @@
         rootver: '#f47771', version: '#83c1bc', mergever: '#de57dc',
         dir: '#fbc85f', link: '#8e4483', file: '#2b5968',
       }[n.type])
-      Object.defineProperty($, 'elm', { get: () => vg.se })
+      Object.defineProperty($, 'elm', { get: () => vg.elm })
     } return $
   }
 
@@ -1008,61 +1025,4 @@
   }
 }
 
-$.ve = vcseditor()
-listenframe(() => ve.frame())
-
-$.sc = splitctn()
-$.dk = docking()
-sc.additem(dk)
-document.body.append(sc)
-$.opente = ({ o, h }) => {
-  const te = texteditor()
-  te.value = h.value
-  te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
-  te.on('save', () => { })
-  const v = ve.getversion(o).verid.slice(0, 8)
-  const n = v + '/' + o.from[Object.keys(o.from)[0]].to[o.id].name
-  let cgd = false, askclose = () => {
-    const w = dom('span')
-    w.innerText = 'file not saved, really close?'
-    w.style.color = '#f00'
-    tb.append(w)
-    setTimeout(() => cgd = false)
-  }
-  if (!dk2.parentNode) {
-    const t = dk.adddock('', 'texteditor')
-    t.setclosable(() => true)
-    dk2 = dk.split(t, 'top')
-  }
-  const tb = dk2.adddock(te, n)
-  tb.setclosable(() => (cgd ? askclose() : 0, !cgd))
-  tb.on('focus', () => {
-    log(n)
-    // TODO: show focus on graph
-  })
-}
-$.opence = ({ o }) => {
-
-}
-
-{
-  const t1 = dk.adddock(ve.elm, 'vcs')
-  $.dk2 = false
-  ve.on('boot text editor', opente)
-  ve.on('boot conflict editor', opence)
-}
-
-{
-  const a = ve.newver().id
-  ve.writefile(a, 'a.js', 'aaa\nbbb\nccc')
-  const b = ve.newver(a).id
-  ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
-  ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
-  ve.writedir(b, 'b')
-  const c = ve.newver(a).id
-  ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
-  ve.merge(b, c)
-  ve.togglenodevcs(a)
-  ve.togglenodevcs(b)
-  ve.togglenodevcs(c)
-}
+log('asdfasdf')
