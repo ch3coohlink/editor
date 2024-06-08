@@ -709,7 +709,7 @@ $.grapheditor = ($ = { g: graph(), gdb: graphdb() }) => {
   const { floor, abs } = Math, ids = [], g = gdb, l = floor(rd(25, 100))
   for (let i = 0; i < l; i++) ids.push([await g.addnode(), ge.g.addnode()])
   for (let i = 0; i < l; i++) {
-    let r = floor(abs(gaussian(0, 2)) * 1) + (rd() > 0.5 ? 1 : 0)
+    let r = floor(abs(gaussian(0, 1)) * 1) + (rd() > 0.5 ? 1 : 0)
     const [a, ai] = ids[i], s = [...ids]
     for (let j = 0; j < r && s.length > 0; j++) {
       const [b, bi] = s.splice(floor(rd(s.length)), 1)[0]
