@@ -1,1 +1,1 @@
-while (true) { log('dead loop') }
+while (true) { console.log('dead loop') }
