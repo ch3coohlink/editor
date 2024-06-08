@@ -7,14 +7,15 @@ const readfile = log
 
 const startfile = 'index.js'
 const content = `
-const f = ()=>{for(let i=0;i<10000000000;i++){}}
-const n = ()=>performance.now()/1000
-setInterval(() => {
+const f = () => {
   log('start work')
   let s = n()
   f()
   log('finish work', n() - s)
-}, 2000)
+  for (let i = 0; i < 10000000000; i++) { }
+}
+const n = ()=>performance.now()/1000
+// setInterval(f, 2000)
 f()
 `
 
