@@ -826,7 +826,10 @@
               let mx = x + dx * 0.5, my = y + dy * 0.5
               mx = x + dx * s, my = y + dy * s
               e.text.setAttribute('transform', `translate(${mx}, ${my})`)
-              let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
+              let l = 1 / sqrt(dx * dx + dy * dy); dx *= l, dy *= l
+              const cl = itp3([68, 68, 68], [256, 68, 68], -dy + 0.5)
+              e.path.setAttribute('stroke', `rgb(${cl.join(', ')})`)
+              dx *= c, dy *= c
               e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
                 `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
             }
@@ -852,7 +855,7 @@
         } const c = svg('circle')
         c.setAttribute('r', circlesize * 1.2 + 'px')
         c.setAttribute('fill', 'none')
-        c.setAttribute('stroke', '#ff3f3f')
+        c.setAttribute('stroke', '#0088ff')
         c.setAttribute('stroke-width', linewidth + 'px')
         n.elm.append(n.elm.hlelm = c)
         currenthignlight = n
@@ -1049,8 +1052,8 @@
   }
   listenframe(g.frame)
   document.body.append(g.elm)
-  const itp = (a, b, t) => (clamp(t, 0, 1), a + t * (b - a))
-  const itp3 = (a, b, t) => (clamp(t, 0, 1),
+  $.itp = (a, b, t) => (t = clamp(t, 0, 1), a + t * (b - a))
+  $.itp3 = (a, b, t) => (t = clamp(t, 0, 1),
     [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])])
   const hl = id => {
     g.highlight(g.g[id])
