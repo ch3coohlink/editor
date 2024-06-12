@@ -33,9 +33,10 @@ let t = now(), i = false
 const upd = () => {
   let b = bf.getChannelData(0)
   let off = (i ? 1 : 0) * ringbuffersize; i = !i
-  const l = 0.1, pt = t, dt = 1 / wa.sampleRate
-  for (let i = 0, t = pt; i < ringbuffersize; i++, t += dt) {
-    b[off + i] = (t % 0.01 > 0.005) ? l : -l
+  const l = 0.1, ct = t, dt = 1 / wa.sampleRate
+  for (let i = 0, t = ct; i < ringbuffersize; i++, t += dt) {
+    const freq = 100 + Math.sin(t * 1000), ft = 1 / freq
+    b[off + i] = (t % ft > ft * 0.5) ? l : -l
   }
 }
 
@@ -52,5 +53,5 @@ scb(f)
 addEventListener('pointerdown', () => {
   log('start')
   wa.resume()
-  t = now()
+  t = now() % timelimit * timelimit
 })
