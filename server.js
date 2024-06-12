@@ -6,11 +6,21 @@ const ws = require('ws')
 const { log } = console
 const port = 9999
 
+const mime = {
+  "html": "text/html",
+  "jpeg": "image/jpeg",
+  "jpg": "image/jpeg",
+  "png": "image/png",
+  "svg": "image/svg+xml",
+  "json": "application/json",
+  "js": "application/javascript",
+  "css": "text/css"
+}
 const server = http.createServer((req, res) => {
   let u = new URL('https://localhost' + req.url)
   let s = fs.createReadStream(path.join(basepath, decodeURI(u.pathname)))
-  s.on('error', () => (res.writeHead(404), res.end()))
-  s.pipe(res)
+  s.on('error', () => (res.writeHead(404), res.end())); s.pipe(res)
+  res.setHeader('Content-Type', mime[u.pathname.split('.').pop()] ?? 'text/plain')
 }).listen(port)
 
 const watches = new Map

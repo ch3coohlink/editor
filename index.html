@@ -17,17 +17,19 @@
     let $ = {}; {
       window.log = console.log
       window.dlog = console.dir
-      window.__require = base => async path => {
+      window.__readfile = b => p => load(solvepath(b, p))
+      window.__require = b => async (ph, p = solvepath(b, ph)) =>
+        loaded.has(p) ? undefined : await exec(p, await load(p))
+
+      let loaded = new Set, AF = (async () => { }).constructor
+      const solvepath = (base, path) => {
         let b = base.split('/'); path = path.split('/'); for (const p of path) {
           if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
-        } path = b.filter(v => v).join('/'); if (loaded.has(path)) { return }
-        await exec(path, await load(path))
-      }
-
-      let loaded = new Set, $ = {}, __AF__ = (async () => { }).constructor
-      const exec = async (path, src) => (loaded.add(path), await (
-        new __AF__('$', `//# sourceURL=${path}\n` +
+        } path = b.filter(v => v).join('/'); return path
+      }, exec = async (path, src) => (loaded.add(path), await (
+        new AF('$', `//# sourceURL=${path}\n` +
           `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
+          `const readfile = __readfile(__dirname)\n` +
           `const require = __require(__dirname)\n` + `with($) {\n${src}\n}`)($)))
 
       let load = path => fetch(path).then(v => v.text())

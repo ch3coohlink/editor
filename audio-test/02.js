@@ -1,8 +1,8 @@
 // 02 - audio worklet
 const wa = new AudioContext()
 
-const src = await(await fetch('audio-test/worklet01.js')).text()
-const blob = new Blob([src], { type: 'text/javascript' })
+const src = await readfile('worklet01.js')
+const blob = new Blob([src], { type: 'application/javascript' })
 
 await wa.audioWorklet.addModule(URL.createObjectURL(blob))
 const osc = wa.createOscillator()
