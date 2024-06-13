@@ -782,9 +782,7 @@
           for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
           for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
           if ('hierarchy' in ad) {
-            // if (a === currenthignlight) { ad.vec.x = ad.vec.y = 0; continue }
             ad.acc.y += ad.hierarchy * tl * 20
-            // distance(currenthignlight, 0.01 * ed, ad, ap)
           } distance(gravity, 0.05 * ed, ad, ap)
           if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
           let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
@@ -1038,6 +1036,7 @@
   // nextseed(1418393879) // crash
   // -------------------------------
   // nextseed(296529988) // another beautiful example
+  // nextseed(3525746380)
   log(gseed)
   const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 200)
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
@@ -1077,7 +1076,6 @@
     for (const i in g.g) {
       const n = g.g[i]
       n.data.hierarchy = (n.data.hierarchy / loop)
-      // + n.nfrom - n.nto
       l = max(l, n.data.hierarchy)
       s = min(s, n.data.hierarchy)
     }
@@ -1085,13 +1083,12 @@
     for (const i in g.g) {
       const n = g.g[i]
       const t = (n.data.hierarchy - s) / (l - s)
-      n.data.hierarchy = t * 2 - 1
+      n.data.hierarchy = 2 * t - 1
       const cl = itp3([256, 0, 0], [0, 0, 256], t)
       n.elm.path.setAttribute('fill', `rgb(${cl.join(', ')})`)
     }
 
     g.reset()
-    // g.g[id].data.pos.x = g.g[id].data.pos.y = 0
   }
   g.on('nodeclick', ({ o }) => hl(o.id))
   hl(5)

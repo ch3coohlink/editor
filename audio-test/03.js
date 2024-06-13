@@ -1,7 +1,7 @@
 // 03 - shared array buffer workerlet
 
 const script = document.createElement('script')
-script.src = 'coi-serviceworker.js'
+script.src = 'coi.js'
 document.head.append(script)
 
 const wa = new AudioContext()
@@ -13,29 +13,43 @@ const loadsrc = async (path, type = jsmime) => {
   return URL.createObjectURL(blob)
 }
 
-log(wa)
+setTimeout(() => log('wa latency', wa.baseLatency + wa.outputLatency), 100)
+
+const STATE = {
+  REQUEST_RENDER: 0,
+  IB_FRAMES_AVAILABLE: 1,
+  IB_READ_INDEX: 2,
+  IB_WRITE_INDEX: 3,
+  OB_FRAMES_AVAILABLE: 4,
+  OB_READ_INDEX: 5,
+  OB_WRITE_INDEX: 6,
+  RING_BUFFER_LENGTH: 7,
+  KERNEL_LENGTH: 8,
+  CURRENT_TIME: 9,
+  SAMPLE_RATE: 10,
+}, CONFIG = {
+  bytesPerState: Int32Array.BYTES_PER_ELEMENT,
+  bytesPerSample: Float32Array.BYTES_PER_ELEMENT,
+  stateBufferLength: 16,
+  ringBufferLength: 512,
+  kernelLength: 256,
+  channelCount: 1,
+}
 
 const sabwkurl = await loadsrc('sabwk.js')
 class SharedBufferWorkletNode extends AudioWorkletNode {
-  constructor(ctx, opt = { ringBufferLength: 1024 * 8, channelCount: 1 }) {
-    super(ctx, 'shared-buffer-worklet-processor', opt)
-    this.option = opt
+  constructor(ctx, opt) {
+    super(ctx, 'sbwp', opt)
     this.worker = new Worker(sabwkurl)
     this.worker.onmessage = (e, d = e.data) => {
-      if (d.message === 'WORKER_READY') { this.port.postMessage(d.SharedBuffers) }
-      else if (d.message === 'WORKER_ERROR') {
-        console.log(`[SharedBufferWorklet] Worker Error: ${d.detail}`)
-        if (typeof this.onError === 'function') { this.onError(d) }
-      } else { console.log(`[SharedBufferWorklet] Unknown message: ${e}`) }
+      if (d.message === 'ready') {
+        this.port.postMessage({ SB: d.SharedBuffers, STATE })
+      } else if (d.message === 'error') { this.onError?.(d) }
     }
     this.port.onmessage = (e, d = e.data) => {
-      if (d.message === 'PROCESSOR_READY' &&
-        typeof this.onInitialized === 'function') { this.onInitialized() }
-      else { console.log(`[SharedBufferWorklet] Unknown message: ${e}`) }
+      if (d.message === 'ready') { this.onInitialized?.() }
     }
-    this.worker.postMessage({
-      message: 'INITIALIZE_WORKER', options: this.option,
-    })
+    this.worker.postMessage({ message: 'init', STATE, CONFIG })
   }
 }
 
