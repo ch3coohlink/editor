@@ -1037,6 +1037,7 @@
   // -------------------------------
   // nextseed(296529988) // another beautiful example
   // nextseed(3525746380)
+  // nextseed(3030174082) // super long chain
   log(gseed)
   const { floor, abs } = Math, ids = [], g = graphlayout(), l = rdi(25, 200)
   for (let i = 0; i < l; i++) ids.push(g.addnode(i).id)
