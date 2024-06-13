@@ -15,27 +15,6 @@ const loadsrc = async (path, type = jsmime) => {
 
 setTimeout(() => log('wa latency', wa.baseLatency + wa.outputLatency), 100)
 
-const STATE = {
-  REQUEST_RENDER: 0,
-  IB_FRAMES_AVAILABLE: 1,
-  IB_READ_INDEX: 2,
-  IB_WRITE_INDEX: 3,
-  OB_FRAMES_AVAILABLE: 4,
-  OB_READ_INDEX: 5,
-  OB_WRITE_INDEX: 6,
-  RING_BUFFER_LENGTH: 7,
-  KERNEL_LENGTH: 8,
-  CURRENT_TIME: 9,
-  SAMPLE_RATE: 10,
-}, CONFIG = {
-  bytesPerState: Int32Array.BYTES_PER_ELEMENT,
-  bytesPerSample: Float32Array.BYTES_PER_ELEMENT,
-  stateBufferLength: 16,
-  ringBufferLength: 512,
-  kernelLength: 512,
-  channelCount: 1,
-}
-
 const sabwkurl = await loadsrc('sabwk.js')
 class SharedBufferWorkletNode extends AudioWorkletNode {
   constructor(ctx, opt) {
@@ -43,13 +22,13 @@ class SharedBufferWorkletNode extends AudioWorkletNode {
     this.worker = new Worker(sabwkurl)
     this.worker.onmessage = (e, d = e.data) => {
       if (d.message === 'ready') {
-        this.port.postMessage({ SB: d.SB, STATE })
+        this.port.postMessage(d)
       } else if (d.message === 'error') { this.onError?.(d) }
     }
     this.port.onmessage = (e, d = e.data) => {
       if (d.message === 'ready') { this.onInitialized?.() }
     }
-    this.worker.postMessage({ message: 'init', STATE, CONFIG })
+    this.worker.postMessage({ message: 'init' })
   }
 }
 

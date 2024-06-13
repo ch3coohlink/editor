@@ -1,31 +1,39 @@
-let STATE, CONFIG
-let state, ib, ob
+const STATE = {
+  REQUEST_RENDER: 0,
+  IB_FRAMES_AVAILABLE: 1,
+  IB_READ_INDEX: 2,
+  IB_WRITE_INDEX: 3,
+  OB_FRAMES_AVAILABLE: 4,
+  OB_READ_INDEX: 5,
+  OB_WRITE_INDEX: 6,
+  RING_BUFFER_LENGTH: 7,
+  KERNEL_LENGTH: 8,
+  CURRENT_TIME: 9,
+  SAMPLE_RATE: 10,
+}, CONFIG = {
+  bytesPerState: Int32Array.BYTES_PER_ELEMENT,
+  bytesPerSample: Float32Array.BYTES_PER_ELEMENT,
+  stateBufferLength: 16,
+  ringBufferLength: 512,
+  kernelLength: 512,
+  channelCount: 1,
+}
+let state, fstate, ob
 
 const { log } = console
-const now = () => performance.now() // 1000
-let pt = now()
 const processKernel = () => {
-  const ct = now()
-  const dt = (ct - pt).toFixed(0)
-  postMessage(dt)
-  log(dt)
-  pt = ct
-  {
-    const ct = state[STATE.CURRENT_TIME] / 1000
-    const sr = state[STATE.SAMPLE_RATE]
-    const st = 1 / sr
-    const b = ob[0], bi = ib[0]
-    let ii = state[STATE.IB_READ_INDEX]
-    let oi = state[STATE.OB_WRITE_INDEX]
-    for (let i = 0; i < CONFIG.kernelLength; ++i) {
-      // b[oi] = bi[ii] * 0.05
-      b[oi] = (i % 100 > 50 ? 1 : -1) * 0.1
-      if (++oi === CONFIG.ringBufferLength) { oi = 0 }
-      if (++ii === CONFIG.ringBufferLength) { ii = 0 }
-    }
-    state[STATE.OB_WRITE_INDEX] = oi
-    state[STATE.IB_READ_INDEX] = ii
+  postMessage('')
+  const ct = fstate[STATE.CURRENT_TIME]
+  const sr = state[STATE.SAMPLE_RATE]
+  const st = 1 / sr
+  const b = ob[0]
+  let oi = state[STATE.OB_WRITE_INDEX]
+  for (let i = 0, t = ct; i < CONFIG.kernelLength; ++i, t += st) {
+    const f = 1 / (100 + Math.sin(t * 1000))
+    b[oi] = ((t % f > f * 0.5) ? 1 : -1) * 0.1
+    if (++oi === CONFIG.ringBufferLength) { oi = 0 }
   }
+  state[STATE.OB_WRITE_INDEX] = oi
 }
 
 const waitOnRenderRequest = () => {
@@ -47,26 +55,18 @@ if (!globalThis.SharedArrayBuffer) {
 const initialize = () => {
   const SB = {}
   SB.states = new SharedArrayBuffer(CONFIG.stateBufferLength * CONFIG.bytesPerState)
-  SB.inputRingBuffer = new SharedArrayBuffer(CONFIG.ringBufferLength *
-    CONFIG.channelCount * CONFIG.bytesPerSample)
   SB.outputRingBuffer = new SharedArrayBuffer(CONFIG.ringBufferLength *
     CONFIG.channelCount * CONFIG.bytesPerSample)
   state = new Int32Array(SB.states)
-  ib = [new Float32Array(SB.inputRingBuffer)]
+  fstate = new Float32Array(SB.states)
   ob = [new Float32Array(SB.outputRingBuffer)]
-
-  Atomics.store(state, STATE.RING_BUFFER_LENGTH, CONFIG.ringBufferLength)
-
-  postMessage({ message: 'ready', SB })
+  state[STATE.RING_BUFFER_LENGTH] = CONFIG.ringBufferLength
+  postMessage({ message: 'ready', SB, STATE })
   waitOnRenderRequest()
 }
 
 onmessage = e => {
   if (e.data.message === 'init') {
-    STATE = e.data.STATE
-    CONFIG = e.data.CONFIG
     initialize()
-  } else {
-    console.log('[SharedBufferWorker] Unknown message: ', e)
   }
 }
