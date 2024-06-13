@@ -12,8 +12,8 @@ const loadsrc = async (path, type = jsmime) => {
   const blob = new Blob([src], { type })
   return URL.createObjectURL(blob)
 }
-
-setTimeout(() => log('wa latency', wa.baseLatency + wa.outputLatency), 100)
+wa.addEventListener('statechange', () => setTimeout(
+  () => log('wa latency', wa.baseLatency + wa.outputLatency), 100))
 
 const sabwkurl = await loadsrc('sabwk.js')
 class SharedBufferWorkletNode extends AudioWorkletNode {
