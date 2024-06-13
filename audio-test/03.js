@@ -20,14 +20,10 @@ class SharedBufferWorkletNode extends AudioWorkletNode {
   constructor(ctx, opt) {
     super(ctx, 'sbwp', opt)
     this.worker = new Worker(sabwkurl)
-    this.worker.onmessage = (e, d = e.data) => {
-      if (d.message === 'ready') {
-        this.port.postMessage(d)
-      } else if (d.message === 'error') { this.onError?.(d) }
-    }
-    this.port.onmessage = (e, d = e.data) => {
-      if (d.message === 'ready') { this.onInitialized?.() }
-    }
+    this.worker.onmessage = (e, d = e.data) =>
+      d.message === 'ready' ? this.port.postMessage(d) : 0
+    this.port.onmessage = (e, d = e.data) =>
+      d.message === 'ready' ? this.onInitialized?.() : 0
     this.worker.postMessage({ message: 'init' })
   }
 }
@@ -37,7 +33,6 @@ const osc = new OscillatorNode(wa)
 const sbwn = new SharedBufferWorkletNode(wa)
 sbwn.onInitialized = () => (
   osc.connect(sbwn).connect(wa.destination), osc.start())
-sbwn.onError = e => { console.log('[ERROR] ' + e.detail) }
 
 {
   const b = document.createElement('button')

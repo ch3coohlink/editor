@@ -22,7 +22,7 @@ let state, fstate, ob
 
 const { log } = console
 const processKernel = () => {
-  postMessage('')
+  postMessage('') // use this post to maintain constant rate
   const ct = fstate[STATE.CURRENT_TIME]
   const sr = state[STATE.SAMPLE_RATE]
   const st = 1 / sr
@@ -40,16 +40,12 @@ const waitOnRenderRequest = () => {
   while (Atomics.wait(state, STATE.REQUEST_RENDER, 0) === 'ok') {
     processKernel()
     state[STATE.OB_FRAMES_AVAILABLE] += CONFIG.kernelLength
-    // Reset the request render bit, and wait again.
     Atomics.store(state, STATE.REQUEST_RENDER, 0)
   }
 }
 
 if (!globalThis.SharedArrayBuffer) {
-  postMessage({
-    message: 'error',
-    detail: `SharedArrayBuffer is not supported in your browser.`,
-  })
+  log(`SharedArrayBuffer is not supported in your browser.`)
 }
 
 const initialize = () => {

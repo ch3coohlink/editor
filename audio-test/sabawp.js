@@ -2,7 +2,7 @@ let STATE, { log } = console
 registerProcessor('sbwp', class extends AudioWorkletProcessor {
   constructor() {
     super(); this.init = false
-    this.port.onmessage = (e) => {
+    this.port.onmessage = e => {
       STATE = e.data.STATE; const SB = e.data.SB
       this.state = new Int32Array(SB.states); this.init = true
       this.fstate = new Float32Array(SB.states)
@@ -18,13 +18,14 @@ registerProcessor('sbwp', class extends AudioWorkletProcessor {
     const oi = this.state[STATE.OB_READ_INDEX]
     const nri = oi + ocd.length
 
+    const bf = this.ob[0]
     if (nri < this.rbl) {
-      const sa = this.ob[0].subarray(oi, nri)
+      const sa = bf.subarray(oi, nri)
       ocd.set(sa)
       this.state[STATE.OB_READ_INDEX] += ocd.length
     } else {
-      const a = this.ob[0].subarray(oi)
-      const b = this.ob[0].subarray(0, nri - this.rbl)
+      const a = bf.subarray(oi)
+      const b = bf.subarray(0, nri - this.rbl)
       ocd.set(a), ocd.set(b, a.length)
       this.state[STATE.OB_READ_INDEX] = b.length
     }
