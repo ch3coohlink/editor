@@ -32,7 +32,7 @@ const STATE = {
   bytesPerSample: Float32Array.BYTES_PER_ELEMENT,
   stateBufferLength: 16,
   ringBufferLength: 512,
-  kernelLength: 256,
+  kernelLength: 512,
   channelCount: 1,
 }
 
@@ -43,7 +43,7 @@ class SharedBufferWorkletNode extends AudioWorkletNode {
     this.worker = new Worker(sabwkurl)
     this.worker.onmessage = (e, d = e.data) => {
       if (d.message === 'ready') {
-        this.port.postMessage({ SB: d.SharedBuffers, STATE })
+        this.port.postMessage({ SB: d.SB, STATE })
       } else if (d.message === 'error') { this.onError?.(d) }
     }
     this.port.onmessage = (e, d = e.data) => {
