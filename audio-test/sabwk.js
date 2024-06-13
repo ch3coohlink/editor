@@ -22,7 +22,6 @@ let state, fstate, ob
 
 const { log } = console
 const processKernel = () => {
-  postMessage('') // use this post to maintain constant rate
   const ct = fstate[STATE.CURRENT_TIME]
   const sr = state[STATE.SAMPLE_RATE]
   const st = 1 / sr
@@ -38,7 +37,7 @@ const processKernel = () => {
 
 const waitOnRenderRequest = () => {
   while (Atomics.wait(state, STATE.REQUEST_RENDER, 0) === 'ok') {
-    processKernel()
+    postMessage(''), processKernel()
     state[STATE.OB_FRAMES_AVAILABLE] += CONFIG.kernelLength
     Atomics.store(state, STATE.REQUEST_RENDER, 0)
   }
