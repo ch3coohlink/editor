@@ -727,9 +727,9 @@
         t.setAttribute('font-size', circlesize + 'px')
         c.addEventListener('contextmenu', e => (
           e.preventDefault(), e.stopImmediatePropagation(),
-          emit('nodectxmenu', e)))
+          emit('nodectxmenu', { o: n, e })))
         listenpointerdown(c, e => {
-          if (e.target !== c || e.button !== 0) { return }
+          if (e.target !== c || e.button !== 0) { return } closectxmenu()
           let sp = geteventlocation(e) // start position
           let moveed = false, m = e => {
             if (e.touches && e.touches.length > 1) { return } reset()
@@ -890,8 +890,7 @@
       $.sep = svg('g'), $.sen = svg('g'), $.seex = svg('g')
       elm.append($.se = svg('g')); se.append(sep, sen, seex)
       listenpointerdown(elm, e => {
-        if (e.target !== elm || e.button !== 0) { return }
-        closectxmenu()
+        if (e.target !== elm || e.button !== 0) { return } closectxmenu()
         const c = { ...camera }, s = screen2svgcoord(c)
         const o = s(...geteventlocation(e)), m = e => {
           if (e.touches && e.touches.length > 2) { return emit('3finger', e) }
@@ -921,57 +920,62 @@
         const { left: l, top: t } = elm.getBoundingClientRect()
         return ef && ef.length == 1 ?
           [ef[0].pageX - l, ef[0].pageY - t] : [e.pageX - l, e.pageY - t]
-      }
-      const ctxmenu = dom()
-      ctxmenu.style.position = 'absolute'
-      ctxmenu.style.background = 'white'
-      ctxmenu.style.borderRadius = '10px'
-      ctxmenu.style.boxShadow = '#0000001c 0 6px 10px'
-      ctxmenu.style.minWidth = '100px'
-      ctxmenu.style.overflow = 'hidden'
-      $.openctxmenu = (e, a = []) => {
-        const [x, y] = geteventlocation(e)
-        ctxmenu.style.opacity = '1'
-        ctxmenu.style.left = x + 'px'
-        ctxmenu.style.top = y + 'px'
-        ctxmenu.style.pointerEvents = 'initial'
-        ctxmenu.innerHTML = ''
-        if (a.length < 1) { return }
-        const [h, ...t] = a.map(([n, f]) => {
-          const b = dom('button')
-          b.style.display = 'block'
-          b.style.background = 'none'
-          b.style.width = '100%'
-          b.style.height = '30px'
-          b.style.textAlign = 'left'
-          b.style.padding = '0 0 0 10px'
-          b.style.border = '0'
-          b.textContent = n
-          b.onclick = f
-          return b
-        })
-        const sp = (e = dom()) => {
-          e.style.width = '100%'
-          e.style.height = '1px'
-          e.style.background = '#000000a8'
-          return e
+      }; { // context menu thing
+        const ctxmenu = dom()
+        ctxmenu.style.position = 'absolute'
+        ctxmenu.style.background = 'white'
+        ctxmenu.style.borderRadius = '10px'
+        ctxmenu.style.boxShadow = '#0000001c 0 6px 10px'
+        ctxmenu.style.minWidth = '100px'
+        ctxmenu.style.overflow = 'hidden'
+        $.openctxmenu = (e, a = []) => {
+          if (a.length < 1) { return }
+          const [x, y] = geteventlocation(e)
+          ctxmenu.style.opacity = '1'
+          ctxmenu.style.left = x + 'px'
+          ctxmenu.style.top = y + 'px'
+          ctxmenu.style.pointerEvents = 'initial'
+          ctxmenu.innerHTML = ''
+          const [h, ...t] = a.map(([n, f]) => {
+            const b = dom('button')
+            b.addEventListener('pointerenter',
+              () => b.style.filter = 'drop-shadow(0px 4px 6px black)')
+            b.addEventListener('pointerleave',
+              () => b.style.filter = 'none')
+            b.style.display = 'block'
+            b.style.background = 'none'
+            b.style.width = '100%'
+            b.style.height = '30px'
+            b.style.textAlign = 'left'
+            b.style.padding = '0 10px 0 10px'
+            b.style.border = '0'
+            b.textContent = n
+            b.onclick = e => (closectxmenu(), f(e))
+            return b
+          })
+          const sp = (e = dom()) => {
+            e.style.width = '100%'
+            e.style.height = '1px'
+            e.style.background = '#000000a8'
+            return e
+          }
+          ctxmenu.append(h, ...t.map(e => [sp(), e]).flat(1))
         }
-        ctxmenu.append(h, ...t.map(e => [sp(), e]).flat(1))
+        $.closectxmenu = () => {
+          ctxmenu.style.opacity = '0'
+          ctxmenu.style.pointerEvents = 'none'
+        }
+        closectxmenu()
+        const dvctn = svg('foreignObject')
+        dvctn.setAttribute('x', 0)
+        dvctn.setAttribute('y', 0)
+        dvctn.setAttribute('width', '100%')
+        dvctn.setAttribute('height', '100%')
+        dvctn.style.pointerEvents = 'none'
+        dvctn.append(ctxmenu)
+        elm.append(dvctn)
+        elm.style.position = 'relative'
       }
-      $.closectxmenu = () => {
-        ctxmenu.style.opacity = '0'
-        ctxmenu.style.pointerEvents = 'none'
-      }
-      closectxmenu()
-      const dvctn = svg('foreignObject')
-      dvctn.setAttribute('x', 0)
-      dvctn.setAttribute('y', 0)
-      dvctn.setAttribute('width', '100%')
-      dvctn.setAttribute('height', '100%')
-      dvctn.style.pointerEvents = 'none'
-      dvctn.append(ctxmenu)
-      elm.append(dvctn)
-      elm.style.position = 'relative'
     } return $
   }
 } { // various tab ------------------------------------------------------------
@@ -982,28 +986,55 @@
         o.elm.softlink?.remove()
         nodemap.delr(o.id)
       })
+      const openfile = o => {
+        const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
+        vg.highlight(o)
+        emit('boot text editor', { o: fo, h: ho, vo: o })
+      }
+      const execfile = o => { }
       vg.on('nodeclick', ({ o, e }) => {
-        if (e.button === 0) {
-          if (o.type === 'file') {
-            const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
-            vg.highlight(o)
-            emit('boot text editor', { o: fo, h: ho, vo: o })
-          }
-          if (o.type === 'mergever') {
-            emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
-          }
-          togglenode(o)
-        } else {
-          e.preventDefault()
-        }
+        if (e.button !== 0) { return }
+        if (o.type === 'file') { openfile(o) }
+        else if (o.type === 'mergever') {
+          emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
+        } togglenode(o)
       })
-      vg.on('nodectxmenu', e => vg.openctxmenu(e, [
-        ['🤔', () => log(1)],
-        ['🤔', () => log(1)],
-      ]))
+      $.setnodepos = (e, n) => setTimeout(() => vg.g[nodemap.get(n.id)]
+        .data.pos = vg.screen2svgcoord()(...vg.geteventlocation(e)))
+      vg.on('nodectxmenu', ({ o, e }) => {
+        let a, n = g[nodemap.getr(o.id)]
+        switch (n.type) {
+          case 'version': a = [
+            ['🍴 new version', e => setnodepos(e, newver(n.id))],
+            ['📂 toggle', () => togglenode(o)],
+            ['🗒️ new file', () => log('need implement')],
+            ['📁 new foler', async () => writedir(n.id, await namingdialog())],
+            ['📍 new link', () => log('need implement')],
+            ['❌ delete', () => log('need implement')],
+          ]; break; case 'file': a = [
+            ['📝 open', () => openfile(o)],
+            ['💻 exec', () => log('need implement')],
+            ['✏️ rename', () => log('need implement')],
+            ['❌ delete', () => log('need implement')],
+          ]; break; case 'dir': a = [
+            ['📂 toggle', () => togglenode(o)],
+            ['🗒️ new file', () => log('need implement')],
+            ['📁 new foler', () => log('need implement')],
+            ['📍 new link', () => log('need implement')],
+            ['✏️ rename', () => log('need implement')],
+            ['❌ delete', () => log('need implement')],
+          ]; break; case 'link': a = [
+            ['📍 relink', () => log('need implement')],
+            ['✏️ rename', () => log('need implement')],
+            ['❌ delete', () => log('need implement')],
+          ]; break; case 'mergever': a = [
+            ['📝 solve', () => emit('boot conflict editor', { o: n })],
+          ]; break
+        } vg.openctxmenu(e, a)
+      })
       vg.on('panelctxmenu', e => vg.openctxmenu(e, [
-        ['🥺', () => log(1)],
-        ['🥺', () => log(1)],
+        ['✨ new version', e => setnodepos(e, newver())],
+        ['🔄️ reset camera', () => log('need implement')],
       ]))
       on('merge', ({ a, b, o }) => {
         const n = vg.addtonode(nodemap.get(a))
@@ -1065,6 +1096,57 @@
       elm.style.position = 'relative'
       elm.style.height = '100%'
       elm.append(vg.elm)
+      { // dialog thing
+        const dialogdv = dom()
+        dialogdv.style.position = 'absolute'
+        dialogdv.style.background = '#0000003c'
+        dialogdv.style.width = dialogdv.style.height = '100%'
+        dialogdv.style.top = dialogdv.style.left = '0'
+        dialogdv.style.opacity = '0'
+        dialogdv.style.pointerEvents = 'none'
+        dialogdv.style.display = 'flex'
+        dialogdv.style.alignItems = 'center'
+        dialogdv.style.justifyContent = 'center'
+        let insidedv = false
+        dialogdv.addEventListener('pointerdown',
+          e => insidedv = e.target === dialogdv)
+        dialogdv.addEventListener('pointerup', e =>
+          e.target === dialogdv && insidedv ? emit('leave dialog') : 0)
+        const dialogprocess = f => async (...a) => {
+          dialogdv.style.opacity = '1'
+          dialogdv.style.pointerEvents = 'initial'
+          dialogdv.innerHTML = ''
+          try { return await f(...a) } catch (e) {
+            if (e !== userend) { /*TODO: send notify*/ log(e) } throw e
+          } finally {
+            dialogdv.style.opacity = '0'
+            dialogdv.style.pointerEvents = 'none'
+            dialogdv.innerHTML = ''
+          }
+        }
+        const userend = new Error('user ended input')
+        $.namingdialog = dialogprocess(async pv => {
+          let r, j, acc = () => r(i.value)
+          const p = new Promise((...a) => [r, j] = a)
+            .finally(() => off('leave dialog', f))
+          const f = () => { j(userend) }; on('leave dialog', f)
+          const d = dom()
+          d.style.background = 'white'
+          d.style.borderRadius = '10px'
+          d.style.padding = '10px'
+          d.style.display = 'flex'
+          d.style.alignItems = 'center'
+          d.style.justifyContent = 'center'
+          const i = dom('input')
+          i.placeholder = 'enter name here'
+          if (typeof pv === 'string') { i.value = pv }
+          i.addEventListener('keyup', e => e.key === 'Enter' ? acc() : 0)
+          const b = dom('button'); b.textContent = 'ok'; b.onclick = acc
+          d.append(i, b); dialogdv.append(d); i.focus()
+          return p
+        })
+        elm.append(dialogdv)
+      }
     } return $
   }
   $.texteditor = ($ = eventnode(dom())) => {
@@ -1190,3 +1272,5 @@ $.opence = ({ o }) => {
   ve.togglenodevcs(b)
   ve.togglenodevcs(c)
 }
+
+ve.namingdialog('dfadfasdf').then(log)
