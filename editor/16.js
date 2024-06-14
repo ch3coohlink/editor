@@ -44,6 +44,13 @@
     while (l < r) (m = (l + r) >>> 1,
       c(a[m], m) > 0 ? r = m : l = m + 1); return r - 1
   }
+  $.bimap = ($ = { am: new Map, bm: new Map }) => {
+    with ($) {
+      $.set = (a, b) => (am.set(a, b), bm.set(b, a))
+      $.get = a => am.get(a), $.getr = b => bm.get(b)
+      $.del = a => am.delete(a), $.delr = b => bm.delete(b)
+    } return $
+  }
 } { // diff algorithm ---------------------------------------------------------
   const { min, max } = Math
   const arr = () => new Proxy({}, { get: (t, k) => t[k] ?? 0 })
@@ -562,7 +569,6 @@
       $.clear = () => (g = {}, emit('clear'))
     } return $
   }
-
   $.vcs = ($ = graph()) => {
     with ($) {
       $.locatebypath = (node, path = '') => {
@@ -684,7 +690,9 @@
       $.readdes = ver => delete g[ver].description
     } return $
   }
-
+  const itp = (a, b, t) => (t = clamp(t, 0, 1), a + t * (b - a))
+  const itp3 = (a, b, t) => (t = clamp(t, 0, 1),
+    [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])])
   $.graphlayout = ($ = graph()) => {
     with ($) {
       on('addnode', ({ o }) => newpos(newnodeelm(o)))
@@ -717,8 +725,11 @@
         t.setAttribute('stroke', forecolor)
         t.setAttribute('stroke-width', circlesize * 0.05 + 'px')
         t.setAttribute('font-size', circlesize + 'px')
+        c.addEventListener('contextmenu', e => (
+          e.preventDefault(), e.stopImmediatePropagation(),
+          emit('nodectxmenu', e)))
         listenpointerdown(c, e => {
-          if (e.target !== c) { return }
+          if (e.target !== c || e.button !== 0) { return }
           let sp = geteventlocation(e) // start position
           let moveed = false, m = e => {
             if (e.touches && e.touches.length > 1) { return } reset()
@@ -726,8 +737,8 @@
             const { x, y } = screen2svgcoord()(...cp)
             n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
             moveed = (cp[0] - sp[0]) ** 2 + (cp[1] - sp[1]) ** 2 > 100
-          }; listenpointermove(m), listenpointerup(() => (
-            moveed ? 0 : emit('nodeclick', { o: n }),
+          }; listenpointermove(m), listenpointerup(e => (
+            moveed ? 0 : emit('nodeclick', { o: n, e }),
             delete n.data.lock, cancelpointermove(m)))
         }); n.elm = g; return n
       }
@@ -782,9 +793,7 @@
           for (let j = i + 1; j < l; j++) { electric(ns[j], ep, ad, ap) }
           for (const k in a.to) { distance(a.to[k].o, ed / a.nto, ad, ap) }
           if ('hierarchy' in ad) {
-            // if (a === currenthignlight) { ad.vec.x = ad.vec.y = 0; continue }
             ad.acc.y += ad.hierarchy * tl * 20
-            // distance(currenthignlight, 0.01 * ed, ad, ap)
           } distance(gravity, 0.05 * ed, ad, ap)
           if (ad.hardlock) { ad.vec.x = ad.vec.y = 0; continue }
           let vx = ad.vec.x + ad.acc.x * dt, vy = ad.vec.y + ad.acc.y * dt
@@ -796,25 +805,27 @@
           ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
         } layouttime += time.realdelta
       }
-      $.circlesize = 5, $.linewidth = circlesize / 7
+      $.circlesize = 15, $.linewidth = circlesize / 7
       $.target_length = circlesize * 10, $.friction = 0.01
+      $.arws = circlesize / 7 * 2
       $.forecolor = '#444'
       $.draw = ns => {
         const w = elm.clientWidth, h = elm.clientHeight
         const x = w / 2 + camera.x, y = h / 2 + camera.y
         const transtr = `translate(${sorigin.x}, ${sorigin.y}) ` +
           `scale(${camera.s}) translate(${x}, ${y})`
-        sep.setAttribute('transform', transtr)
+        se.setAttribute('transform', transtr)
+        se.setAttribute('transform', transtr)
+        se.setAttribute('transform', transtr)
         sep.setAttribute('fill', 'none')
         sep.setAttribute('stroke', forecolor)
         sep.setAttribute('stroke-width', linewidth + 'px')
         sep.setAttribute('stroke-linecap', 'round')
-        sen.setAttribute('transform', transtr)
         if (stop) { return } for (const n of ns) {
           const { x, y } = n.data.pos, e = n.elm
           e.setAttribute('transform', `translate(${x}, ${y})`)
           for (const k in n.to) {
-            const b = n.to[k], bp = b.o.data.pos, e = b.elm, arws = circlesize / 7 * 2
+            const b = n.to[k], bp = b.o.data.pos, e = b.elm
             if (b.o === n) {
               const c = arws, r = circlesize - linewidth / 2, r2 = r * 2
               e.path.setAttribute('d', `M ${x + r} ${y} m ${r} 0 ` +
@@ -826,13 +837,18 @@
               let mx = x + dx * 0.5, my = y + dy * 0.5
               mx = x + dx * s, my = y + dy * s
               e.text.setAttribute('transform', `translate(${mx}, ${my})`)
-              let l = 1 / sqrt(dx * dx + dy * dy); dx *= l * c, dy *= l * c
+              let l = 1 / sqrt(dx * dx + dy * dy)
+              dx *= l, dy *= l; if (hierarchical) {
+                const cl = itp3([68, 68, 68], [256, 68, 68], -dy + 0.5)
+                e.path.setAttribute('stroke', `rgb(${cl.join(', ')})`)
+              } dx *= c, dy *= c
               e.path.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
                 `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
             }
           } n.customdraw?.()
         }
       }
+      $.hierarchical = false
       $.stop = false, $.layouttime = 0, $.multirun = 4
       $.total_speed = 0, $.total_accelaration = 0
       $.frame = () => {
@@ -845,6 +861,7 @@
         } draw(ns); for (const [f, a] of pending) { f(...a) } pending = []
       }
       $.currenthignlight = _
+      $.highlightcolor = '#0088ff'
       $.highlight = n => {
         if (currenthignlight) {
           currenthignlight.elm.hlelm.remove()
@@ -852,7 +869,7 @@
         } const c = svg('circle')
         c.setAttribute('r', circlesize * 1.2 + 'px')
         c.setAttribute('fill', 'none')
-        c.setAttribute('stroke', '#ff3f3f')
+        c.setAttribute('stroke', highlightcolor)
         c.setAttribute('stroke-width', linewidth + 'px')
         n.elm.append(n.elm.hlelm = c)
         currenthignlight = n
@@ -870,9 +887,11 @@
       elm.style.filter = 'drop-shadow(#777 0px 4px 6px)'
       elm.style.userSelect = elm.style.touchAction = 'none'
       elm.style.height = elm.style.width = '100%'
-      $.sep = svg('g'), $.sen = svg('g'); elm.append(sep, sen)
+      $.sep = svg('g'), $.sen = svg('g'), $.seex = svg('g')
+      elm.append($.se = svg('g')); se.append(sep, sen, seex)
       listenpointerdown(elm, e => {
-        if (e.target !== elm) { return }
+        if (e.target !== elm || e.button !== 0) { return }
+        closectxmenu()
         const c = { ...camera }, s = screen2svgcoord(c)
         const o = s(...geteventlocation(e)), m = e => {
           if (e.touches && e.touches.length > 2) { return emit('3finger', e) }
@@ -890,6 +909,8 @@
         if (d === lpd) { return } if (lpd === null) { lpd = d }
         zoom([(a.x + b.x) / 2, (a.y + b.y) / 2], d / lpd); lpd = d
       }
+      elm.addEventListener('contextmenu', e =>
+        (e.preventDefault(), emit('panelctxmenu', e)))
       elm.addEventListener('wheel', (e, r = 1.2) => e.deltaY < 0
         ? zoom(geteventlocation(e), r) : zoom(geteventlocation(e), 1 / r))
       $.zoom = ([x, y], f, s) => (s = camera.s,
@@ -901,31 +922,89 @@
         return ef && ef.length == 1 ?
           [ef[0].pageX - l, ef[0].pageY - t] : [e.pageX - l, e.pageY - t]
       }
+      const ctxmenu = dom()
+      ctxmenu.style.position = 'absolute'
+      ctxmenu.style.background = 'white'
+      ctxmenu.style.borderRadius = '10px'
+      ctxmenu.style.boxShadow = '#0000001c 0 6px 10px'
+      ctxmenu.style.minWidth = '100px'
+      ctxmenu.style.overflow = 'hidden'
+      $.openctxmenu = (e, a = []) => {
+        const [x, y] = geteventlocation(e)
+        ctxmenu.style.opacity = '1'
+        ctxmenu.style.left = x + 'px'
+        ctxmenu.style.top = y + 'px'
+        ctxmenu.style.pointerEvents = 'initial'
+        ctxmenu.innerHTML = ''
+        if (a.length < 1) { return }
+        const [h, ...t] = a.map(([n, f]) => {
+          const b = dom('button')
+          b.style.display = 'block'
+          b.style.background = 'none'
+          b.style.width = '100%'
+          b.style.height = '30px'
+          b.style.textAlign = 'left'
+          b.style.padding = '0 0 0 10px'
+          b.style.border = '0'
+          b.textContent = n
+          b.onclick = f
+          return b
+        })
+        const sp = (e = dom()) => {
+          e.style.width = '100%'
+          e.style.height = '1px'
+          e.style.background = '#000000a8'
+          return e
+        }
+        ctxmenu.append(h, ...t.map(e => [sp(), e]).flat(1))
+      }
+      $.closectxmenu = () => {
+        ctxmenu.style.opacity = '0'
+        ctxmenu.style.pointerEvents = 'none'
+      }
+      closectxmenu()
+      const dvctn = svg('foreignObject')
+      dvctn.setAttribute('x', 0)
+      dvctn.setAttribute('y', 0)
+      dvctn.setAttribute('width', '100%')
+      dvctn.setAttribute('height', '100%')
+      dvctn.style.pointerEvents = 'none'
+      dvctn.append(ctxmenu)
+      elm.append(dvctn)
+      elm.style.position = 'relative'
     } return $
   }
-
-  $.bimap = ($ = { am: new Map, bm: new Map }) => {
-    with ($) {
-      $.set = (a, b) => (am.set(a, b), bm.set(b, a))
-      $.get = a => am.get(a), $.getr = b => bm.get(b)
-      $.del = a => am.delete(a), $.delr = b => bm.delete(b)
-    } return $
-  }
-
+} { // various tab ------------------------------------------------------------
   $.vcseditor = ($ = vcs()) => {
     with ($) {
       $.vg = graphlayout(), $.nodemap = bimap()
-      vg.on('delnode', ({ o: { id } }) => nodemap.delr(id))
-      vg.on('nodeclick', ({ o }) => {
-        if (o.type === 'file') {
-          const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
-          emit('boot text editor', { o: fo, h: ho })
-        }
-        if (o.type === 'mergever') {
-          emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
-        }
-        togglenode(o)
+      vg.on('delnode', ({ o }) => {
+        o.elm.softlink?.remove()
+        nodemap.delr(o.id)
       })
+      vg.on('nodeclick', ({ o, e }) => {
+        if (e.button === 0) {
+          if (o.type === 'file') {
+            const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
+            vg.highlight(o)
+            emit('boot text editor', { o: fo, h: ho, vo: o })
+          }
+          if (o.type === 'mergever') {
+            emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
+          }
+          togglenode(o)
+        } else {
+          e.preventDefault()
+        }
+      })
+      vg.on('nodectxmenu', e => vg.openctxmenu(e, [
+        ['🤔', () => log(1)],
+        ['🤔', () => log(1)],
+      ]))
+      vg.on('panelctxmenu', e => vg.openctxmenu(e, [
+        ['🥺', () => log(1)],
+        ['🥺', () => log(1)],
+      ]))
       on('merge', ({ a, b, o }) => {
         const n = vg.addtonode(nodemap.get(a))
         vg.addedge(nodemap.get(b), n.id)
@@ -953,6 +1032,25 @@
             e.type = edge.o.type
             if (e.type === 'link') {
               e.name = edge.name + ' | ' + g[edge.o.value].verid.slice(0, 8)
+              e.customdraw = () => {
+                const b = vg.g[nodemap.get(edge.o.value)]
+                let sl = e.elm.softlink; if (!sl) {
+                  sl = e.elm.softlink = svg('path')
+                  vg.seex.append(sl)
+                  sl.setAttribute('fill', 'none')
+                  sl.setAttribute('stroke', vg.highlightcolor)
+                  sl.setAttribute('stroke-width', vg.linewidth + 'px')
+                  sl.setAttribute('stroke-linecap', 'round')
+                  sl.setAttribute('stroke-dasharray', '1, 3.5')
+                  sl.setAttribute('opacity', '0.8')
+                  sl.style.pointerEvents = 'none'
+                } let { x, y } = e.data.pos, bp = b.data.pos
+                let dx = bp.x - x, dy = bp.y - y, c = vg.circlesize / 7 * 5
+                let mx = x + dx * 0.5, my = y + dy * 0.5
+                let l = 1 / Math.sqrt(dx * dx + dy * dy) * c; dx *= l, dy *= l
+                sl.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+                  `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+              }
             } else { e.name = edge.name }
             nodemap.set(edge.o.id, e.id)
             setnodecolor(e)
@@ -961,13 +1059,14 @@
       }
       $.setnodecolor = n => n.elm.path.setAttribute('fill', {
         rootver: '#f47771', version: '#83c1bc', mergever: '#de57dc',
-        dir: '#fbc85f', link: '#8e4483', file: '#2b5968',
+        dir: '#fbc85f', link: '#6ab525', file: '#2b5968',
       }[n.type])
-      Object.defineProperty($, 'elm', { get: () => vg.elm })
+      $.elm = dom()
+      elm.style.position = 'relative'
+      elm.style.height = '100%'
+      elm.append(vg.elm)
     } return $
   }
-
-} { // text editor ------------------------------------------------------------
   $.texteditor = ($ = eventnode(dom())) => {
     with ($) {
       const root = attachShadow({ mode: "open" })
@@ -1017,7 +1116,11 @@
       $.close = () => { parent.style.display = "none" }
     } return $
   }
-} { // conflict editor --------------------------------------------------------
+  $.sandboxtab = ($ = eventnode(dom())) => {
+    with ($) {
+
+    } return $
+  }
   $.cfeditor = ($ = eventnode(dom())) => {
     with ($) {
 
@@ -1025,4 +1128,65 @@
   }
 }
 
-log('asdfasdf')
+
+$.ve = vcseditor()
+listenframe(() => ve.frame())
+
+$.sc = splitctn()
+$.dk = docking()
+sc.additem(dk)
+document.body.append(sc)
+$.opente = ({ o, h, vo }) => {
+  const te = texteditor()
+  te.value = h.value
+  te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
+  te.on('save', () => { })
+  const v = ve.getversion(o).verid.slice(0, 8)
+  const n = v + '/' + o.from[Object.keys(o.from)[0]].to[o.id].name
+  const ext = n.split('.').pop()
+  te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
+  let cgd = false, askclose = () => {
+    const w = dom('span')
+    w.innerText = 'file not saved, really close?'
+    w.style.color = '#f00'
+    tb.append(w)
+    setTimeout(() => cgd = false)
+  }
+  if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
+  const tb = dk2.adddock(te, n)
+  tb.setclosable(() => (cgd ? askclose() : 0, !cgd))
+  tb.on('focus', () => ve.vg.highlight(vo))
+}
+$.opence = ({ o }) => {
+
+}
+
+{
+  dk.adddock(ve.elm, 'vcs')
+  $.dk2 = false
+  ve.on('boot text editor', opente)
+  ve.on('boot conflict editor', opence)
+  $.createdk = (d = 'left', wt) => {
+    const t = dk.adddock('', 'texteditor')
+    t.setclosable(() => true)
+    const dk2 = dk.split(t, d)
+    setTimeout(() => dk2.deldock(t))
+    wt(dk2)
+  }
+}
+
+{
+  const a = ve.newver().id
+  ve.writefile(a, 'a.js', 'aaa\nbbb\nccc')
+  const b = ve.newver(a).id
+  ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
+  ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
+  ve.writedir(b, 'b')
+  const c = ve.newver(a).id
+  ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
+  ve.writelink(c, 'b', b)
+  ve.merge(b, c)
+  ve.togglenodevcs(a)
+  ve.togglenodevcs(b)
+  ve.togglenodevcs(c)
+}

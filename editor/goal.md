@@ -25,7 +25,7 @@
 - [ ] record open state in git graph
 - [ ] serialization
 - [ ] save file to disk
-- [ ] soft link in graph layout
+- [x] soft link in graph layout
 - [ ] git editor ui
   - [ ] set camera home position
   - [ ] new version
@@ -40,6 +40,6 @@
   - [ ] save file
   - [ ] file state link to tab
     - [ ] file delete
-    - [ ] focus on file tab make cvs highlight file node
+    - [x] focus on file tab make cvs highlight file node
     - [ ] click on tab content also has the above behavior
 - [ ] change file overwrite behaviour
