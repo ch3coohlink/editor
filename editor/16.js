@@ -1272,5 +1272,3 @@ $.opence = ({ o }) => {
   ve.togglenodevcs(b)
   ve.togglenodevcs(c)
 }
-
-ve.namingdialog('dfadfasdf').then(log)
