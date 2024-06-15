@@ -26,8 +26,12 @@
   }
   $.eventnode = ($ = {}) => {
     $._handles = {}; with ($) {
-      $.emit = (t, ...a) => _handles[t]?.forEach(f => f(...a))
-      $.on = (t, f) => (_handles[t] ??= new Set).add(f)
+      $.emit = (t, ...a) => {
+        if (delay) { da.push(() => _handles[t]?.forEach(f => f(...a))) }
+        else { _handles[t]?.forEach(f => f(...a)) }
+      }; $.on = (t, f) => (_handles[t] ??= new Set).add(f)
+      let delay = false, da = []; $.setdelay = () => { delay = true }
+      $.enddelay = () => { for (const f of da) { f() } da = []; delay = false }
       $.off = (t, f) => (_handles[t]?.delete(f),
         _handles[t].size > 0 ? 0 : delete _handles[t])
     } return $
@@ -546,26 +550,27 @@
         g[a].nto--, g[b].nfrom--, emit('deledge', { a, b, o })
       }
       $.nameedge = (a, b, n) => (g[a].children[n] = b,
-        g[a].to[b].name = n, emit('nameedge', { o: g[a].to[b] }))
+        g[a].to[b].name = n, emit('nameedge', { a, b, o: g[a].to[b] }))
       $.unnameedge = (a, b, n = g[a].to[b].name) => (delete g[a].children[n],
-        delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
+        delete g[a].to[b].name, emit('nameedge', { a, b, o: g[a].to[b] }))
       $.unnameedgebyname = (a, n, b = g[a].children[n]) => (delete g[a].children[n],
-        delete g[a].to[b].name, emit('nameedge', { o: g[a].to[b] }))
+        delete g[a].to[b].name, emit('nameedge', { a, b, o: g[a].to[b] }))
       $.renameedge = (a, n, nn, b = g[a].children[n]) => (delete g[a].children[n],
-        g[a].children[nn] = b, g[a].to[b].name = nn, emit('nameedge', { o: g[a].to[b] }))
+        g[a].children[nn] = b, g[a].to[b].name = nn, emit('nameedge', { a, b, o: g[a].to[b] }))
       $.deltree = (n, l = 0, c = g[n].children) => {
         for (const k in c) { deltree(c[k], l - 1) }
         if (l <= 0) { delnode(n) }
       }
       $.addtonode = (a, name, id, force = false) => {
         if (!g[a]) { throw `non exist node: ${a}` }
-        const pb = g[a].children[name]
-        if (name !== undefined && pb !== undefined) {
+        const pb = g[a].children[name]; if (pb) {
           if (force) { delnode(pb) }
           else { throw `edge existed: ${a}:${name}` }
         } const b = addnode(id); addedge(a, b.id, name)
-        emit('addtonode', { o: b }); return b
+        emit('addtonode', { p: g[a], o: b }); return b
       }
+      $.getto = (n, i = 0) => n.to[Object.keys(n.to)[i]]?.o
+      $.getfrom = (n, i = 0) => n.from[Object.keys(n.from)[i]]
       $.clear = () => (g = {}, emit('clear'))
     } return $
   }
@@ -596,25 +601,23 @@
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
       }
-      // TODO: change overwrite behaviour
       $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
-        const b = addtonode(loc, name, _, force)
+        setdelay(); const b = addtonode(loc, name, _, force)
         if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
-        b.type = 'file', b.value = h; return b
+        b.type = 'file', b.value = h; enddelay(); return b
       }
       $.writedir = (loc, name, force) => {
-        const b = addtonode(loc, name, _, force)
-        b.type = 'dir'; return b
+        setdelay(); const b = addtonode(loc, name, _, force)
+        b.type = 'dir'; enddelay(); return b
       }
       $.writelink = (loc, name, ref, force) => {
-        const b = addtonode(loc, name, _, force)
-        b.type = 'link', b.value = ref; return b
+        setdelay(); const b = addtonode(loc, name, _, force)
+        b.type = 'link', b.value = ref; enddelay(); return b
       }
       const copytree = (a, b) => {
         const c = g[a].children
         for (const t in c) {
-          const edge = g[a].to[c[t]]
-          const o = edge.o
+          const edge = g[a].to[c[t]], o = edge.o
           const target = addtonode(b, edge.name)
           target.type = o.type
           if (o.type === 'file') {
@@ -629,10 +632,10 @@
       $.newver = (p, b = p !== undefined) => {
         if (b && g[p] && g[p].type !== 'version') {
           throw `privous node is not a vcs version: ${p}`
-        } if (b) { o = addtonode(p) } else { o = addnode() }
+        } setdelay(); o = b ? addtonode(p) : addnode()
         o.type = 'version', o.verid = uuid()
         if (b) { copytree(p, o.id), g[p].lock = true }
-        emit('newver', { p, pb: b, o }); return o
+        emit('newver', { p, pb: b, o }); enddelay(); return o
       }
       $.nodeancester = n => {
         let a = new Set, q = [], c = g[n]; while (c.nfrom > 0) {
@@ -677,17 +680,17 @@
         if (!g[a]) { throw `non exist node: ${a}` }
         if (!g[b]) { throw `non exist node: ${b}` }
         let os = [...lcas(a, b)], o = os[0] // TODO: multi ancester merge
-        const r = diffver(g[a], g[b], g[o])
+        const r = diffver(g[a], g[b], g[o]); setdelay()
         const m = addtonode(a); addedge(b, m.id)
         m.verid = uuid(), m.type = 'mergever', m.value = r
-        emit('merge', { a, b, o: m })
+        emit('merge', { a, b, o: m }); enddelay()
       }
       $.getversion = n => {
         while (n.type !== 'version') { n = n.from[Object.keys(n.from)[0]] }
         return n
       }
-      $.writedes = (ver, text) => { g[ver].description = text }
-      $.readdes = ver => delete g[ver].description
+      $.writedes = (id, text) => { g[id].description = text }
+      $.readdes = id => delete g[id].description
     } return $
   }
   const itp = (a, b, t) => (t = clamp(t, 0, 1), a + t * (b - a))
@@ -701,9 +704,8 @@
       on('deledge', ({ o }) => deledgeelm(o))
       on('namenode', ({ o }) => namenodeelm(o))
       on('nameedge', ({ o }) => nameedgeelm(o))
-      on('clear', () => sep.innerHTML = sen.innerHTML = '')
-      on('addtonode', ({ o }) => {
-        const p = o.from[Object.keys(o.from)[0]]
+      on('clear', () => sep.innerHTML = sen.innerHTML = seex.innerHTML = '')
+      on('addtonode', ({ p, o }) => {
         o.data.pos.x = p.data.pos.y + rd(-1, 1) * target_length * 0.1
         o.data.pos.y = p.data.pos.y + rd(-1, 1) * target_length * 0.1
       })
@@ -975,6 +977,10 @@
         dvctn.append(ctxmenu)
         elm.append(dvctn)
         elm.style.position = 'relative'
+      } { // selection dialog
+        $.selectdialog = async () => {
+          // TODO
+        }
       }
     } return $
   }
@@ -982,34 +988,100 @@
   $.vcseditor = ($ = vcs()) => {
     with ($) {
       $.vg = graphlayout(), $.nodemap = bimap()
-      vg.on('delnode', ({ o }) => {
-        o.elm.softlink?.remove()
-        nodemap.delr(o.id)
+      on('addnode', ({ o }) => {
+        if (o.type === 'version' || o.type === 'mergever') {
+          let vo = vg.addnode()
+          vo.name = o.verid.slice(0, 8)
+          vo.open = false
+          vo.type = o.nfrom === 0 ? 'rootver' : o.type
+          postaddnode(vo, o)
+        } else if (o.type !== 'hashobj') {
+          const p = getfrom(o), vp = tovnode(p)
+          if (vp && vp.open) { createfilenode(vp, p.to[o.id], o, vg.addnode()) }
+        }
       })
-      const openfile = o => {
-        const fo = g[nodemap.getr(o.id)], ho = g[fo.value]
-        vg.highlight(o)
+      on('delnode', ({ o }, vo = tovnode(o)) => vo ? vg.delnode(vo.id) : 0)
+      on('addedge', ({ a, b, o }) => {
+        a = tovnode(a), b = tovnode(b)
+        if (a && b) { vg.addedge(a.id, b.id, o.name) }
+      })
+      on('deledge', ({ a, b, o }) => {
+        a = tovnode(a), b = tovnode(b)
+        if (a && b) { vg.deledge(a.id, b.id) }
+      })
+      on('namenode', ({ o }) => {
+        const vo = tovnode(o)
+        if (vo) { vg.emit('namenode', { o: vo }) }
+      })
+      on('nameedge', ({ a, b, o }) => {
+        const va = tovnode(a), vb = tovnode(a); if (va && vb) {
+          const a = va.id, b = vb.id
+          vg.emit('nameedge', { a, b, o: va.to[b] })
+        }
+      })
+      on('clear', () => vg.clear())
+      on('addtonode', ({ p, o }) => {
+        p = tovnode(p), o = tovnode(o)
+        if (p && o) { vg.emit('addtonode', { p, o }) }
+      })
+      on('newver', ({ p, pb, o }) => { })
+      on('merge', ({ a, b, o }) => { })
+      const tovnode = n => vg.g[nodemap.get(n.id ?? n)]
+      const tornode = n => g[nodemap.getr(n.id ?? n)]
+      const postaddnode = (vo, o) =>
+        vo ? (nodemap.set(o.id, vo.id), setnodecolor(vo)) : 0
+      const createfilenode = (p, edge, o, vo) => {
+        vo.type = o.type; if (o.type === 'link') {
+          vo.customdraw = () => {
+            const b = vg.g[nodemap.get(o.value)]
+            let sl = vo.elm.softlink; if (!sl) {
+              sl = vo.elm.softlink = svg('path')
+              vg.seex.append(sl)
+              sl.setAttribute('fill', 'none')
+              sl.setAttribute('stroke', vg.highlightcolor)
+              sl.setAttribute('stroke-width', vg.linewidth + 'px')
+              sl.setAttribute('stroke-linecap', 'round')
+              sl.setAttribute('stroke-dasharray', '1, 3.5')
+              sl.setAttribute('opacity', '0.8')
+              sl.style.pointerEvents = 'none'
+            } let { x, y } = vo.data.pos, bp = b.data.pos
+            let dx = bp.x - x, dy = bp.y - y, c = vg.circlesize / 7 * 5
+            let mx = x + dx * 0.5, my = y + dy * 0.5
+            let l = 1 / Math.sqrt(dx * dx + dy * dy) * c; dx *= l, dy *= l
+            sl.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+              `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+          }; vo.name = edge.name + ' | ' + g[o.value].verid.slice(0, 8)
+        } else { vo.name = edge.name }
+        postaddnode(vo, o)
+      }
+      $.openfile = o => {
+        const fo = tornode(o), ho = g[fo.value]; vg.highlight(o)
         emit('boot text editor', { o: fo, h: ho, vo: o })
       }
-      const execfile = o => { }
+      $.savefile = o => { } // TODO
+      $.execfile = o => { } // TODO
+      $.solveconflict = o => emit('boot conflict editor', { o })
+      $.setnodepos = (e, n) => setTimeout(() => tovnode(n).data.pos =
+        vg.screen2svgcoord()(...vg.geteventlocation(e)))
+      vg.on('delnode', ({ o }) =>
+        (o.elm.softlink?.remove(), nodemap.delr(o.id)))
       vg.on('nodeclick', ({ o, e }) => {
         if (e.button !== 0) { return }
         if (o.type === 'file') { openfile(o) }
-        else if (o.type === 'mergever') {
-          emit('boot conflict editor', { o: g[nodemap.getr(o.id)] })
-        } togglenode(o)
+        else if (o.type === 'mergever') { solveconflict(tornode(o)) }
+        else if (o.type === 'link') { }
+        else { togglenode(o) }
       })
-      $.setnodepos = (e, n) => setTimeout(() => vg.g[nodemap.get(n.id)]
-        .data.pos = vg.screen2svgcoord()(...vg.geteventlocation(e)))
       vg.on('nodectxmenu', ({ o, e }) => {
-        let a, n = g[nodemap.getr(o.id)]
+        let a, n = tornode(o)
         switch (n.type) {
           case 'version': a = [
-            ['🍴 new version', e => setnodepos(e, newver(n.id))],
             ['📂 toggle', () => togglenode(o)],
             ['🗒️ new file', async () => writefile(n.id, await namingdialog(), '')],
             ['📁 new foler', async () => writedir(n.id, await namingdialog())],
             ['📍 new link', () => log('need implement')],
+            ['⤵️ new version', e => setnodepos(e, newver(n.id))],
+            ['🔀 merge', () => log('need implement')],
             ['❌ delete', () => log('need implement')],
           ]; break; case 'file': a = [
             ['📝 open', () => openfile(o)],
@@ -1036,55 +1108,15 @@
         ['✨ new version', e => setnodepos(e, newver())],
         ['🔄️ reset camera', () => log('need implement')],
       ]))
-      on('merge', ({ a, b, o }) => {
-        const n = vg.addtonode(nodemap.get(a))
-        vg.addedge(nodemap.get(b), n.id)
-        n.name = o.verid.slice(0, 8)
-        n.open = false; n.type = o.type
-        emit('add visual node', { n, o })
-      })
-      on('add visual node', ({ n, o }) => (nodemap.set(o.id, n.id), setnodecolor(n)))
-      on('newver', ({ p, pb, o }) => {
-        const n = pb ? vg.addtonode(nodemap.get(p)) : vg.addnode()
-        n.name = o.verid.slice(0, 8)
-        n.open = false; n.type = pb ? 'version' : 'rootver'
-        emit('add visual node', { n, o })
-      }); $.frame = vg.frame
-      $.togglenodevcs = id => togglenode(vg.g[nodemap.get(id)])
-      $.togglenode = n => {
-        n.open = !n.open
-        if (!n.open) { vg.deltree(n.id, 1) } else {
-          const o = g[nodemap.getr(n.id)]
-          const c = o.children
+      $.frame = vg.frame
+      $.togglenodevcs = n => togglenode(vg.g[nodemap.get(n.id ?? n)])
+      $.togglenode = vo => {
+        vo.open = !vo.open; if (!vo.open) { vg.deltree(vo.id, 1) } else {
+          const o = tornode(vo.id), c = o.children
           for (const t in c) {
-            const edge = o.to[c[t]]
-            const e = vg.addtonode(n.id, edge.name)
-            e.type = edge.o.type
-            if (e.type === 'link') {
-              e.name = edge.name + ' | ' + g[edge.o.value].verid.slice(0, 8)
-              e.customdraw = () => {
-                const b = vg.g[nodemap.get(edge.o.value)]
-                let sl = e.elm.softlink; if (!sl) {
-                  sl = e.elm.softlink = svg('path')
-                  vg.seex.append(sl)
-                  sl.setAttribute('fill', 'none')
-                  sl.setAttribute('stroke', vg.highlightcolor)
-                  sl.setAttribute('stroke-width', vg.linewidth + 'px')
-                  sl.setAttribute('stroke-linecap', 'round')
-                  sl.setAttribute('stroke-dasharray', '1, 3.5')
-                  sl.setAttribute('opacity', '0.8')
-                  sl.style.pointerEvents = 'none'
-                } let { x, y } = e.data.pos, bp = b.data.pos
-                let dx = bp.x - x, dy = bp.y - y, c = vg.circlesize / 7 * 5
-                let mx = x + dx * 0.5, my = y + dy * 0.5
-                let l = 1 / Math.sqrt(dx * dx + dy * dy) * c; dx *= l, dy *= l
-                sl.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
-                  `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
-              }
-            } else { e.name = edge.name }
-            nodemap.set(edge.o.id, e.id)
-            setnodecolor(e)
-          } vg.reset()
+            const e = o.to[c[t]], cvo = vg.addtonode(vo.id, e.name)
+            createfilenode(vo, e, e.o, cvo)
+          }
         }
       }
       $.setnodecolor = n => n.elm.path.setAttribute('fill', {
@@ -1241,12 +1273,15 @@ $.opente = ({ o, h, vo }) => {
 $.opence = ({ o }) => {
 
 }
+$.opensb = () => {
+}
 
 {
   dk.adddock(ve.elm, 'vcs')
-  $.dk2 = false
+  $.dk2 = false, $.dk3 = false
   ve.on('boot text editor', opente)
   ve.on('boot conflict editor', opence)
+  ve.on('boot sandbox', opensb)
   $.createdk = (d = 'left', wt) => {
     const t = dk.adddock('', 'texteditor')
     t.setclosable(() => true)
@@ -1267,7 +1302,7 @@ $.opence = ({ o }) => {
   ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
   ve.writelink(c, 'b', b)
   ve.merge(b, c)
-  ve.togglenodevcs(a)
-  ve.togglenodevcs(b)
-  ve.togglenodevcs(c)
+  // ve.togglenodevcs(a)
+  // ve.togglenodevcs(b)
+  // ve.togglenodevcs(c)
 }
