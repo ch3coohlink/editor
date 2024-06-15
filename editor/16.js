@@ -731,7 +731,8 @@
           e.preventDefault(), e.stopImmediatePropagation(),
           emit('nodectxmenu', { o: n, e })))
         listenpointerdown(c, e => {
-          if (e.target !== c || e.button !== 0) { return } closectxmenu()
+          if (e.target !== c || e.button !== 0) { return }
+          if (insd) { return r(n) } closectxmenu()
           let sp = geteventlocation(e) // start position
           let moveed = false, m = e => {
             if (e.touches && e.touches.length > 1) { return } reset()
@@ -977,10 +978,9 @@
         dvctn.append(ctxmenu)
         elm.append(dvctn)
         elm.style.position = 'relative'
-      } { // selection dialog
-        $.selectdialog = async () => {
-          // TODO
-        }
+      } let insd = false, r, j; { // selection dialog
+        $.selectdialog = (...a) => (insd = true,
+          [r, j] = a.map(f => (...a) => (insd = false, f(...a))))
       }
     } return $
   }
@@ -1001,31 +1001,16 @@
         }
       })
       on('delnode', ({ o }, vo = tovnode(o)) => vo ? vg.delnode(vo.id) : 0)
-      on('addedge', ({ a, b, o }) => {
-        a = tovnode(a), b = tovnode(b)
-        if (a && b) { vg.addedge(a.id, b.id, o.name) }
-      })
-      on('deledge', ({ a, b, o }) => {
-        a = tovnode(a), b = tovnode(b)
-        if (a && b) { vg.deledge(a.id, b.id) }
-      })
-      on('namenode', ({ o }) => {
-        const vo = tovnode(o)
-        if (vo) { vg.emit('namenode', { o: vo }) }
-      })
-      on('nameedge', ({ a, b, o }) => {
-        const va = tovnode(a), vb = tovnode(a); if (va && vb) {
-          const a = va.id, b = vb.id
-          vg.emit('nameedge', { a, b, o: va.to[b] })
-        }
-      })
+      on('addedge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
+        a && b ? vg.addedge(a.id, b.id, o.name) : 0))
+      on('deledge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
+        a && b ? vg.deledge(a.id, b.id) : 0))
+      on('namenode', ({ o }, vo = tovnode(o)) => vo ? vg.emit('namenode', { o: vo }) : 0)
+      on('nameedge', ({ a, b, o }, va = tovnode(a), vb = tovnode(a)) => va && vb ?
+        (a = va.id, b = vb.id, vg.emit('nameedge', { a, b, o: va.to[b] })) : 0)
       on('clear', () => vg.clear())
-      on('addtonode', ({ p, o }) => {
-        p = tovnode(p), o = tovnode(o)
-        if (p && o) { vg.emit('addtonode', { p, o }) }
-      })
-      on('newver', ({ p, pb, o }) => { })
-      on('merge', ({ a, b, o }) => { })
+      on('addtonode', ({ p, o }) => (p = tovnode(p), o = tovnode(o),
+        p && o ? vg.emit('addtonode', { p, o }) : 0))
       const tovnode = n => vg.g[nodemap.get(n.id ?? n)]
       const tornode = n => g[nodemap.getr(n.id ?? n)]
       const postaddnode = (vo, o) =>
@@ -1033,7 +1018,7 @@
       const createfilenode = (p, edge, o, vo) => {
         vo.type = o.type; if (o.type === 'link') {
           vo.customdraw = () => {
-            const b = vg.g[nodemap.get(o.value)]
+            const b = tovnode(o.value)
             let sl = vo.elm.softlink; if (!sl) {
               sl = vo.elm.softlink = svg('path')
               vg.seex.append(sl)
@@ -1109,7 +1094,7 @@
         ['🔄️ reset camera', () => log('need implement')],
       ]))
       $.frame = vg.frame
-      $.togglenodevcs = n => togglenode(vg.g[nodemap.get(n.id ?? n)])
+      $.togglernode = n => togglenode(tovnode(n))
       $.togglenode = vo => {
         vo.open = !vo.open; if (!vo.open) { vg.deltree(vo.id, 1) } else {
           const o = tornode(vo.id), c = o.children
@@ -1123,10 +1108,9 @@
         rootver: '#f47771', version: '#83c1bc', mergever: '#de57dc',
         dir: '#fbc85f', link: '#6ab525', file: '#2b5968',
       }[n.type])
-      $.elm = dom()
+      $.elm = dom(); elm.append(vg.elm)
       elm.style.position = 'relative'
       elm.style.height = '100%'
-      elm.append(vg.elm)
       { // dialog thing
         const dialogdv = dom()
         dialogdv.style.position = 'absolute'
@@ -1148,7 +1132,7 @@
           dialogdv.style.pointerEvents = 'initial'
           dialogdv.innerHTML = ''
           try { return await f(...a) } catch (e) {
-            if (e !== userend) { /*TODO: send notify*/ log(e) } throw e
+            if (e !== userend) { log(e) } throw e
           } finally {
             dialogdv.style.opacity = '0'
             dialogdv.style.pointerEvents = 'none'
@@ -1176,8 +1160,39 @@
           d.append(i, b); dialogdv.append(d); i.focus()
           return p
         })
+        $.pickonedialog = dialogprocess(async () => {
+          elm.style.background = '#00000022'
+          const bk = dialogdv.style.background
+          dialogdv.style.background = ''
+          dialogdv.style.pointerEvents = 'none'
+          let r, j, p = new Promise((...a) => [r, j] = a)
+            .finally(() => (elm.style.background = '',
+              dialogdv.style.background = bk))
+          vg.selectdialog(r, j)
+          const d = dom(), t = dom('span'), b = dom('button')
+          d.style.pointerEvents = 'initial'
+          d.style.background = '#00000044'
+          d.style.borderRadius = '10px'
+          d.style.borderTopLeftRadius = ''
+          d.style.borderTopRightRadius = ''
+          d.style.placeSelf = 'flex-start'
+          d.style.padding = '10px 20px'
+          t.textContent = 'pick a node'
+          t.style.paddingRight = '10px'
+          b.textContent = '✕'; b.onclick = () => j(userend)
+          const bbk = b.style.background = '#00000044'
+          b.style.width = b.style.height = '30px'
+          b.style.borderRadius = '10px', b.style.border = '0'
+          b.addEventListener('pointerdown', () => b.style.background = '#00000088')
+          b.addEventListener('pointerdup', () => b.style.background = bbk)
+          b.addEventListener('pointerenter', () => b.style.background = '#00000066')
+          b.addEventListener('pointerleave', () => b.style.background = bbk)
+          d.append(t, b); dialogdv.append(d); return p
+        })
         elm.append(dialogdv)
       }
+      pickonedialog().then(log)
+      // namingdialog().then(log)
     } return $
   }
   $.texteditor = ($ = eventnode(dom())) => {
@@ -1302,7 +1317,7 @@ $.opensb = () => {
   ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
   ve.writelink(c, 'b', b)
   ve.merge(b, c)
-  // ve.togglenodevcs(a)
-  // ve.togglenodevcs(b)
-  // ve.togglenodevcs(c)
+  ve.togglernode(a)
+  ve.togglernode(b)
+  ve.togglernode(c)
 }
