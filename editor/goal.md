@@ -14,6 +14,13 @@
 - [x] lock previous version
 - [x] dealing with overlap write
 - [x] better node click detection (allow small dragging amount)
+- [x] change file overwrite behaviour
+- [x] soft link in graph layout
+- [x] git editor ui
+  - [x] set camera home position
+  - [x] new version
+  - [x] new file/dir/link
+    - [x] new link version selecion
 - [x] docking system
   - [x] many many small issue
   - [x] simplify container tree
@@ -25,26 +32,19 @@
 - [ ] record open state in git graph
 - [ ] serialization
 - [ ] save file to disk
-- [x] soft link in graph layout
-- [ ] git editor ui
-  - [ ] set camera home position
-  - [ ] new version
-  - [ ] new file/dir/link
-    - [ ] new link version selecion
 - [ ] conflict editor
   - [ ] show all add delete file
   - [ ] show conflict file
 - all edtior combined
   - [x] text editor tab
   - [x] file modified hint & prevent close
-  - [ ] rename
+  - [x] rename
   - [ ] exec
     - [ ] sandbox
-  - [ ] delete (and visual node)
-  - [ ] create visual node for new file
+  - [x] delete (and visual node)
+  - [x] create visual node for new file
   - [ ] save file
   - [ ] file state link to tab
     - [ ] file delete
     - [x] focus on file tab make cvs highlight file node
     - [ ] click on tab content also has the above behavior
-- [ ] change file overwrite behaviour
