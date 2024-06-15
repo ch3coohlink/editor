@@ -1073,12 +1073,13 @@
       })
       vg.on('nodectxmenu', ({ o: vo, e }) => {
         let a, o = tornode(vo); const toggle = () => togglenode(vo)
-        const newfile = async () => writefile(o.id, await namingdialog(), '')
-        const newdir = async () => writedir(o.id, await namingdialog())
+        const open = () => { if (!vo.open) { toggle() } }
+        const newfile = async () => { writefile(o.id, await namingdialog(), ''); open() }
+        const newdir = async () => { writedir(o.id, await namingdialog()); open() }
         const newlink = async () => {
           const n = await namingdialog(); checkname(n)
           const t = tornode(await pickonedialog()); checkversion(t)
-          writelink(o.id, n, t.id)
+          writelink(o.id, n, t.id); open()
         }, relink = async () => {
           const t = tornode(await pickonedialog()); checkversion(t)
           o.value = t.id; vo.customdraw()
