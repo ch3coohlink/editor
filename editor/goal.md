@@ -37,6 +37,11 @@
 - all edtior combined
   - [x] text editor tab
   - [x] file modified hint & prevent close
+  - [ ] rename
+  - [ ] exec
+    - [ ] sandbox
+  - [ ] delete (and visual node)
+  - [ ] create visual node for new file
   - [ ] save file
   - [ ] file state link to tab
     - [ ] file delete

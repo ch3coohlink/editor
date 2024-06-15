@@ -1007,7 +1007,7 @@
           case 'version': a = [
             ['🍴 new version', e => setnodepos(e, newver(n.id))],
             ['📂 toggle', () => togglenode(o)],
-            ['🗒️ new file', () => log('need implement')],
+            ['🗒️ new file', async () => writefile(n.id, await namingdialog(), '')],
             ['📁 new foler', async () => writedir(n.id, await namingdialog())],
             ['📍 new link', () => log('need implement')],
             ['❌ delete', () => log('need implement')],
@@ -1053,8 +1053,7 @@
       $.togglenodevcs = id => togglenode(vg.g[nodemap.get(id)])
       $.togglenode = n => {
         n.open = !n.open
-        if (!n.open) { vg.deltree(n.id, 1) }
-        else {
+        if (!n.open) { vg.deltree(n.id, 1) } else {
           const o = g[nodemap.getr(n.id)]
           const c = o.children
           for (const t in c) {
