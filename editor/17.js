@@ -1,4 +1,4 @@
-// 16.js - vcs editor ui function
+// 17 - sandbox integration
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined
