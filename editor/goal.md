@@ -23,6 +23,15 @@
     - [x] new link version selecion
 - [x] prevent wirte for locked version
   - [x] readonly text editor
+- all edtior combined
+  - [x] text editor tab
+  - [x] file modified hint & prevent close
+  - [x] rename
+  - [x] exec
+    - [x] sandbox
+  - [x] delete (and visual node)
+  - [x] create visual node for new file
+  - [x] save file
 - [x] docking system
   - [x] many many small issue
   - [x] simplify container tree
@@ -38,16 +47,23 @@
         which means you don't need to save them
   - [ ] show all add delete file
   - [ ] show conflict file
-- all edtior combined
-  - [x] text editor tab
-  - [x] file modified hint & prevent close
-  - [x] rename
-  - [ ] exec
-    - [ ] sandbox
-  - [x] delete (and visual node)
-  - [x] create visual node for new file
-  - [x] save file
-  - [ ] file state link to tab
-    - [ ] file delete
-    - [x] focus on file tab make cvs highlight file node
-    - [ ] click on tab content also has the above behavior
+- file state link to tab
+  - [ ] file delete
+  - [x] focus on file tab make cvs highlight file node
+  - [ ] click on tab content also has the above behavior
+  - [ ] no readonly event is fired when version become readonly
+- sandbox
+  - [ ] load boot config file
+  - [ ] polyfill setTimeout etc...
+  - [ ] worker sandbox
+  - [ ] worker graphic
+  - [ ] worker audio
+  - [ ] worker input/output
+- console
+  - [x] toggle cli
+  - [x] log format for some basic js type
+    - [x] but will fail to format a proxy
+      - it's ok, just rememeber to prevent crashing
+  - [ ] log length limit
+  - [ ] cli scroll bar
+  - [ ] automatic cli scroll when scrolled to end

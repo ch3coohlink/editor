@@ -590,13 +590,7 @@
           }
         } return n
       }
-      $.read = (ver, path) => {
-        const n = locatebypath(ver, path)
-        const value = g[n].value, type = g[n].type
-        if (type === 'file') { return g[value].value }
-        else if (type === 'link') { return { type, value } }
-        else if (type === 'dir') { return { type, id: n } }
-      }
+      $.read = (ver, path) => g[locatebypath(ver, path)]
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
       }
@@ -694,6 +688,12 @@
       }
       $.getversion = n => {
         while (n.type !== 'version') { n = getfrom(n) } return n
+      }
+      $.getpath = n => {
+        const p = []; while (n.type !== 'version') {
+          const on = n; n = getfrom(n)
+          p.unshift(n.to[on.id].name)
+        } return { version: n, path: p }
       }
       $.writedes = (id, text) => { g[id].description = text }
       $.readdes = id => delete g[id].description
@@ -872,7 +872,7 @@
       $.currenthignlight = _
       $.highlightcolor = '#0088ff'
       $.highlight = n => {
-        if (currenthignlight) {
+        if (!n) { return } if (currenthignlight) {
           currenthignlight.elm.hlelm.remove()
           delete currenthignlight.elm.hlelm
         } const c = svg('circle')
@@ -993,6 +993,14 @@
     } return $
   }
 } { // various tab ------------------------------------------------------------
+  const btn = (t, bbk = '#00000044', b = dom('button')) => (
+    b.style.background = bbk,
+    b.textContent = t, b.style.width = b.style.height = '30px',
+    b.style.borderRadius = '10px', b.style.border = '0',
+    b.addEventListener('pointerdown', () => b.style.background = '#00000088'),
+    b.addEventListener('pointerdup', () => b.style.background = bbk),
+    b.addEventListener('pointerenter', () => b.style.background = '#00000066'),
+    b.addEventListener('pointerleave', () => b.style.background = bbk), b)
   $.vcseditor = ($ = vcs()) => {
     with ($) {
       $.vg = graphlayout(), $.nodemap = bimap()
@@ -1019,8 +1027,8 @@
       }), on('clear', () => vg.clear())
       on('addtonode', ({ p, o }) => (p = tovnode(p), o = tovnode(o),
         p && o ? vg.emit('addtonode', { p, o }) : 0))
-      const tovnode = n => vg.g[nodemap.get(n.id ?? n)]
-      const tornode = n => g[nodemap.getr(n.id ?? n)]
+      $.tovnode = n => vg.g[nodemap.get(n.id ?? n)]
+      $.tornode = n => g[nodemap.getr(n.id ?? n)]
       const postaddnode = (vo, o) =>
         vo ? (nodemap.set(o.id, vo.id), setnodecolor(vo)) : 0
       const createfilenode = (p, edge, o, vo) => {
@@ -1050,8 +1058,8 @@
         try { f(...a) } catch (e) { if (e !== userend) { makeerrornotify(e) } }
       }])
       $.openfile = (o, vo = tovnode(o)) => {
-        const ho = g[o.value]; vg.highlight(vo)
-        emit('boot text editor', { o, h: ho, vo })
+
+        emit('boot text editor', { o })
       }
       $.savefile = (o, t, h = hexenc(sha256(t))) => {
         checkversion(o); setdelay(); deledge(o.id, o.value)
@@ -1104,7 +1112,7 @@
             ['📍 new link', newlink], ['⤵️ new version', () => newver(o.id)],
             ['🔀 merge', mergever], ['❌ delete', deletever],
           ]; break; case 'file': a = [
-            ['📝 open', () => openfile(o, vo)], ['💻 exec', () => execfile(o)],
+            ['💻 exec', () => execfile(o)], ['📝 open', () => openfile(o, vo)],
             ['✏️ rename', renamenode], ['❌ delete', deletenode],
           ]; break; case 'dir': a = [
             ['📂 toggle', toggle], ['🗒️ new file', newfile], ['📁 new foler', newdir],
@@ -1184,13 +1192,6 @@
           d.append(i, b); dialogdv.append(d); i.focus()
           return p
         })
-        const btn = (b = dom('button'), bbk = b.style.background = '#00000044') => (
-          b.style.width = b.style.height = '30px',
-          b.style.borderRadius = '10px', b.style.border = '0',
-          b.addEventListener('pointerdown', () => b.style.background = '#00000088'),
-          b.addEventListener('pointerdup', () => b.style.background = bbk),
-          b.addEventListener('pointerenter', () => b.style.background = '#00000066'),
-          b.addEventListener('pointerleave', () => b.style.background = bbk), b)
         $.pickonedialog = dialogprocess(async () => {
           elm.style.background = '#00000022'
           const bk = dialogdv.style.background
@@ -1200,7 +1201,7 @@
             .finally(() => (elm.style.background = '',
               dialogdv.style.background = bk))
           vg.selectdialog(r, j)
-          const d = dom(), t = dom('span'), b = btn()
+          const d = dom(), t = dom('span'), b = btn('✕')
           d.style.pointerEvents = 'initial'
           d.style.background = '#00000044'
           d.style.borderRadius = '10px'
@@ -1210,7 +1211,7 @@
           d.style.padding = '10px 20px'
           t.textContent = 'pick a node'
           t.style.paddingRight = '10px'
-          b.textContent = '✕'; b.onclick = () => j(userend)
+          b.onclick = () => j(userend)
           d.append(t, b); dialogdv.append(d); return p
         })
         $.deleteversiondialog = dialogprocess(async () => {
@@ -1223,7 +1224,7 @@
               off('leave dialog', f)))
           const f = () => j(userend); on('leave dialog', f)
           const d = dom(), t = dom('span')
-          const yb = btn(), nb = btn()
+          const yb = btn('Yes'), nb = btn('No')
           d.style.pointerEvents = 'initial'
           d.style.background = '#00000044'
           d.style.borderRadius = '10px'
@@ -1234,8 +1235,7 @@
           t.innerHTML = `You can delete a version with no child version,` +
             ` but you will lost all data inside it.<br>Proceed?<br>`
           yb.style.color = 'red'; t.style.color = '#8c0000'
-          yb.textContent = 'Yes'; yb.onclick = r
-          nb.textContent = 'No'; nb.onclick = f
+          yb.onclick = r; nb.onclick = f
           yb.style.padding = nb.style.padding = '5px'
           yb.style.margin = nb.style.margin = '5px'
           yb.style.width = nb.style.width = '40px'
@@ -1244,7 +1244,9 @@
         elm.append(dialogdv)
       } {// TODO: notication
         $.makenotify = m => { }
-        $.makeerrornotify = m => { }
+        $.makeerrornotify = m => {
+          console.error(m)
+        }
       }
     } return $
   }
@@ -1300,7 +1302,113 @@
   }
   $.sandboxtab = ($ = eventnode(dom())) => {
     with ($) {
+      $.configtab = eventnode(dom())
+      configtab.style.margin = '0px 5px'
+      configtab.style.display = 'flex'
+      configtab.style.cursor = 'initial'
+      const bs = '▶️ 🧾 ⚙️'.split(' ').map(b => {
+        b = btn(b, 'none'), b.style.padding = '0'
+        b.style.height = b.style.width = '20px'
+        b.style.fontSize = '10px'; return b
+      }); configtab.append(...bs)
+      bs[0].onclick = () => exec()
+      bs[1].onclick = () => togglecli()
+      bs[2].onclick = () => log('need implement')
+      configtab.addEventListener('pointerdown', e => e.preventDefault())
+      $.style.height = '100%'
+      $.style.position = 'relative'
+      $.vcs = $.target = $.path = false
 
+      const domdiv = dom(), clidiv = dom(), clictn = dom(); { // cli style
+        clidiv.classList.add('no-scroll-bar')
+        clidiv.append(clictn)
+        let cliopen = true; $.togglecli = () => {
+          cliopen = !cliopen; if (cliopen) {
+            clidiv.style.opacity = '1'
+            clidiv.style.pointerEvents = 'initial'
+            clidiv.style.top = '0'
+            domdiv.style.filter = 'blur(1.5px)'
+          } else {
+            clidiv.style.opacity = '0'
+            clidiv.style.pointerEvents = 'none'
+            clidiv.style.top = '100%'
+            domdiv.style.filter = ''
+          }
+        }, transtime = '0.1s'
+        clidiv.style.transition = 'all ' + transtime
+        domdiv.style.transition = 'filter ' + transtime
+        clidiv.style.height = clidiv.style.width = '100%'
+        clidiv.style.position = 'absolute'
+        clidiv.style.overflowX = 'hidden'
+        clidiv.style.overflowY = 'auto'
+        clidiv.style.color = '#f0f0f0'
+        clidiv.style.padding = '20px'
+        clidiv.style.boxSizing = 'border-box'
+        clidiv.style.background = '#00000088'
+        clidiv.style.textShadow = '0px 0px 4px #000000a1'
+        clidiv.style.fontFamily = 'consolas'
+        clidiv.style.whiteSpace = 'pre-wrap'
+        clictn.style.maxWidth = '1000px'
+        domdiv.style.height = '100%'
+        togglecli()
+      } $.append(domdiv, clidiv)
+      $.exec = async () => {
+        // TODO: read a config file
+        domdiv.innerHTML = ''
+        if (!path) { path = vcs.getpath(target) }
+        const ver = path.version
+
+        let env = { root: domdiv }, load = p => {
+          const o = vcs.read(path.version.id, p)
+          if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
+          return vcs.g[o.value].value
+        }
+        let logd, nolog = false, _error = (nodup, ...a) => (
+          nodup ? nolog = true : 0, _log(...a), nolog = false,
+          logd.style.textShadow = 'red 0px 0px 4px')
+        const format = v => {
+          switch (typeof v) {
+            case 'string': v = `"${v}"`; break
+            case 'function': v = '⨍ ' + v; break
+            case 'symbol': v = `Symbol("${v.description}")`; break
+            case 'bigint': v = v + 'n'; break; case 'object':
+              if (v instanceof Error) { v = v.stack } else if (v instanceof Array) {
+                v = `(${v.length}) [${v.map(v => typeof v === 'object' ? v : format(v)).join(', ')}]`
+              } else if (v && !(v instanceof Date)) {
+                const a = [v.toString().slice(8, -1) + ' {']; for (const k in v) {
+                  let vv = v[k]; a.push('  ' + k + ': ' + (
+                    typeof vv === 'object' ? vv : format(vv)))
+                } a.push('}'); v = a.join(a.length > 2 ? '\n' : ' ')
+              } else { v = '' + v } break; default: v = '' + v; break
+          } return v
+        }, _log = (...a) => {
+          nolog ? 0 : console.log(...a); try {
+            let d = dom(), s, l = a.length - 1; d.textContent = '> '
+            if (l < 0) { return }; for (let i = 0; i < l; i++) {
+              d.append(s = dom('span'), ' '), s.textContent = format(a[i])
+            } d.append(s = dom('span')), s.textContent = format(a[l])
+            clictn.append(d); logd = d
+          } catch (e) { _error(false, 'console.log failed to print log'); console.error(e) }
+        }, clear = () => { clictn.innerHTML = '' }; clear()
+        env.console = { log: _log, clear, error: (...a) => _error(false, ...a) }
+        env.__readfile = b => p => load(solvepath(b, p))
+        env.__require = b => async (ph, p = solvepath(b, ph)) =>
+          loaded.has(p) ? undefined : await exec(p, await load(p))
+        let loaded = new Set, AF = (async () => { }).constructor
+        const solvepath = (base, path) => {
+          let b = base.split('/'); path = path.split('/'); for (const p of path) {
+            if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
+          } path = b.filter(v => v).join('/'); return path
+        }, exec = async (path, src, v = ver) => (loaded.add(path), await (
+          new AF('$', `//# sourceURL=${v.verid.slice(0, 8) + '/' + path}\n` +
+            `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
+            `const readfile = $.__readfile(__dirname)\n` +
+            `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)))
+
+        try {
+          await exec(path.path.join('/'), vcs.g[target.value].value)
+        } catch (e) { _error(true, e); console.error(e) }
+      }
     } return $
   }
   $.cfeditor = ($ = eventnode(dom())) => {
@@ -1317,10 +1425,10 @@ $.sc = splitctn()
 $.dk = docking()
 sc.additem(dk)
 document.body.append(sc)
-$.opente = ({ o, h, vo }) => {
+$.opente = ({ o }) => {
   const te = texteditor(), v = ve.getversion(o)
-  te.value = h.value; const rdo = !ve.leafversion(v)
-  if (rdo) { te.setreadonly() }
+  te.value = ve.g[o.value].value
+  const rdo = !ve.leafversion(v); if (rdo) { te.setreadonly() }
   te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
   te.on('save', () => (ve.savefile(o, te.value),
     cgd = false, tb.textContent = n))
@@ -1336,13 +1444,31 @@ $.opente = ({ o, h, vo }) => {
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
   tb.setclosable((b = cgd) => (b ? askclose() : 0, !b))
-  tb.on('focus', () => ve.vg.highlight(vo))
+  const f = () => ve.vg.highlight(ve.tovnode(o))
+  tb.on('focus', f); f()
+  return te
 }
 $.opence = ({ o }) => {
   log(o)
 }
 $.opensb = ({ o }) => {
-  log(o)
+  const sb = sandboxtab(), v = ve.getversion(o)
+  sb.vcs = ve, sb.target = o
+  const n = v.verid.slice(0, 8) + '/' +
+    o.from[Object.keys(o.from)[0]].to[o.id].name
+  if (!dk3.parentNode) { createdk('top', v => dk3 = v) }
+  const tab = dom(), tbt = dom('span')
+  tbt.textContent = n
+  tbt.style.fontSize = '10px'
+  tab.style.display = 'flex'
+  tab.style.alignItems = 'center'
+  tab.style.height = '100%'
+  tab.append(tbt, sb.configtab)
+  const tb = dk3.adddock(sb, tab)
+  tb.setclosable(() => true)
+  const f = () => ve.vg.highlight(ve.tovnode(o))
+  tb.on('focus', f); f(); sb.exec()
+  return sb
 }
 
 {
@@ -1352,7 +1478,7 @@ $.opensb = ({ o }) => {
   ve.on('boot conflict editor', opence)
   ve.on('boot sandbox', opensb)
   $.createdk = (d = 'left', wt) => {
-    const t = dk.adddock('', 'texteditor')
+    const t = dk.adddock('', 'temp')
     t.setclosable(() => true)
     const dk2 = dk.split(t, d)
     setTimeout(() => dk2.deldock(t))
@@ -1366,12 +1492,46 @@ $.opensb = ({ o }) => {
   const b = ve.newver(a).id
   ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
   ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
-  ve.writedir(b, 'b')
+  ve.writefile(ve.writedir(b, 'b').id, 'test', `test`, true)
   const c = ve.newver(a).id
-  ve.writefile(c, 'a.js', 'bbb\n\ccc', true)
+  ve.writefile(c, 'a.js', `aaa\nggg\nccc`, true)
   ve.writelink(c, 'b', b)
   ve.merge(b, c)
+  const d = ve.newver(c).id
+  const e = ve.writefile(d, 'a.js',
+    `root.innerHTML = 'HELLO HTML '.repeat(300)
+const { log } = console
+log('hello sandbox')
+log(__dirname)
+log(readfile)
+log({ a: 1, b: {} })
+log({})
+log(new Set)
+log(new Proxy(new Set, {}))
+log(new Proxy(document, {})) // this fails
+// this is ok
+// log(new Proxy(document, { get: (o,k) => o[k] }))
+// log(document)
+log(null)
+log(undefined)
+log(new Date())
+log(performance.now())
+log(Symbol('symbol'))
+log(await readfile('b/b.js'))
+log(await readfile('b/b/test'))
+log(BigInt(123))
+log(...new Array(50).fill('hello sandbox'))
+log(new Array(50).fill('hello sandbox'))
+log(Error('error'))
+console.error(Error('test error'))
+const wait = t => new Promise(r => setTimeout(r, t))
+await wait(500)
+throw Error('real error')`, true)
   ve.togglernode(a)
   ve.togglernode(b)
   ve.togglernode(c)
+  ve.togglernode(d)
+  const sb = opensb({ o: e })
+  opente({ o: e })
+  setTimeout(sb.togglecli, 100)
 }
