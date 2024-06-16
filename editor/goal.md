@@ -21,6 +21,8 @@
   - [x] new version
   - [x] new file/dir/link
     - [x] new link version selecion
+- [x] prevent wirte for locked version
+  - [x] readonly text editor
 - [x] docking system
   - [x] many many small issue
   - [x] simplify container tree
@@ -28,11 +30,12 @@
   - [ ] redesign panel resizing mechanism
   - [ ] last active panel
 - [ ] folder open/close identifier
-- [ ] prevent wirte for locked version
 - [ ] record open state in git graph
 - [ ] serialization
 - [ ] save file to disk
 - [ ] conflict editor
+  - [ ] delay the conflict data generation to solve time, 
+        which means you don't need to save them
   - [ ] show all add delete file
   - [ ] show conflict file
 - all edtior combined
@@ -43,7 +46,7 @@
     - [ ] sandbox
   - [x] delete (and visual node)
   - [x] create visual node for new file
-  - [ ] save file
+  - [x] save file
   - [ ] file state link to tab
     - [ ] file delete
     - [x] focus on file tab make cvs highlight file node

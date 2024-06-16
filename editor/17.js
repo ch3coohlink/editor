@@ -491,8 +491,7 @@
         te.undock = () => cp().deldock(te)
         te.draggable = true; cp().focustab(te)
         te.setclosable = f => (te.closable = true, te.onclosetab = f)
-        Object.assign(te, opt)
-        listenpointerdown(te, e => {
+        Object.assign(te, opt); listenpointerdown(te, e => {
           if (e.button === 1 && te.closable) {
             te.onclosetab() ? te.undock() : 0
             e.preventDefault()
@@ -689,9 +688,12 @@
         m.verid = uuid(), m.type = 'mergever', m.value = r
         emit('merge', { a, b, o: m }); enddelay()
       }
+      $.leafversion = v => v.nto - Object.keys(v.children).length <= 0
+      $.checkversion = (o, v = getversion(o)) => {
+        if (!leafversion(v)) { throw new Error('Invalid operation on a non-leaf version.') }
+      }
       $.getversion = n => {
-        while (n.type !== 'version') { n = n.from[Object.keys(n.from)[0]] }
-        return n
+        while (n.type !== 'version') { n = getfrom(n) } return n
       }
       $.writedes = (id, text) => { g[id].description = text }
       $.readdes = id => delete g[id].description
@@ -1051,17 +1053,17 @@
         const ho = g[o.value]; vg.highlight(vo)
         emit('boot text editor', { o, h: ho, vo })
       }
-      $.savefile = (o, t) => {
-        log(o, t)
-      } // TODO
-      $.execfile = o => {
-
-      } // TODO
+      $.savefile = (o, t, h = hexenc(sha256(t))) => {
+        checkversion(o); setdelay(); deledge(o.id, o.value)
+        if (!g[h]) { addhashobj(h, t) } addedge(o.id, h)
+        o.value = h; enddelay(); return o
+      }
+      $.execfile = o => emit('boot sandbox', { o })
       $.solveconflict = o => emit('boot conflict editor', { o })
       $.setnodepos = (e, n) => setTimeout(() => tovnode(n).data.pos =
         vg.screen2svgcoord()(...vg.geteventlocation(e)))
-      $.checkversion = o => {
-        if (o?.type !== 'version') { throw new Error('Invalid node: not a version.') }
+      $.checkisversion = (o, b = o?.type !== 'version') => {
+        if (b) { throw new Error('Invalid node: not a version.') }
       }
       vg.on('delnode', ({ o }) =>
         (o.elm.softlink?.remove(), nodemap.delr(o.id)))
@@ -1074,25 +1076,26 @@
       vg.on('nodectxmenu', ({ o: vo, e }) => {
         let a, o = tornode(vo); const toggle = () => togglenode(vo)
         const open = () => { if (!vo.open) { toggle() } }
-        const newfile = async () => { writefile(o.id, await namingdialog(), ''); open() }
-        const newdir = async () => { writedir(o.id, await namingdialog()); open() }
-        const newlink = async () => {
-          const n = await namingdialog(); checkname(n)
-          const t = tornode(await pickonedialog()); checkversion(t)
+        const newfile = async () => {
+          checkversion(o); writefile(o.id, await namingdialog(), ''); open()
+        }, newdir = async () => {
+          checkversion(o); writedir(o.id, await namingdialog()); open()
+        }, newlink = async () => {
+          checkversion(o); const n = await namingdialog(); checkname(n)
+          const t = tornode(await pickonedialog()); checkisversion(t)
           writelink(o.id, n, t.id); open()
         }, relink = async () => {
-          const t = tornode(await pickonedialog()); checkversion(t)
+          checkversion(o); const t = tornode(await pickonedialog()); checkisversion(t)
           o.value = t.id; vo.customdraw()
         }, mergever = async () => {
-          const t = tornode(await pickonedialog()); checkversion(t)
+          const t = tornode(await pickonedialog()); checkisversion(t)
           merge(o.id, t.id)
         }, renamenode = async () => {
-          const n = await namingdialog(); checkname(n)
+          checkversion(o); const on = getfrom(o).to[o.id].name
+          const n = await namingdialog(on); checkname(n)
           renameedge(getfrom(o).id, o.id, n)
         }, deletever = async () => {
-          if (o.nto - Object.keys(o.children).length > 0) {
-            throw new Error(`Can't delete a non-leaf version.`)
-          } await deleteversiondialog(); deltree(o.id)
+          checkversion(o); await deleteversiondialog(); deltree(o.id)
         }, deletenode = async () => {
           if (o.type === 'dir') { deltree(o.id) } else { delnode(o.id) }
         }; switch (o.type) {
@@ -1274,7 +1277,7 @@
       editor.addAction({
         id: "save-text-file", label: "Save File",
         keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-        run: () => emit("filesave", value),
+        run: () => emit("save", value),
       })
       editor.addAction({
         id: "toggle-word-warp", label: "Toggle Word Warp",
@@ -1282,6 +1285,7 @@
         run: () => ($.wordWrap = wordWrap === "on" ? "off" : "on",
           editor.updateOptions({ wordWrap })),
       })
+      $.setreadonly = (readOnly = true) => editor.updateOptions({ readOnly })
 
       $.change_language = l =>
         monaco.editor.setModelLanguage(editor.getModel(), l)
@@ -1306,7 +1310,6 @@
   }
 }
 
-
 $.ve = vcseditor()
 listenframe(() => ve.frame())
 
@@ -1315,30 +1318,31 @@ $.dk = docking()
 sc.additem(dk)
 document.body.append(sc)
 $.opente = ({ o, h, vo }) => {
-  const te = texteditor()
-  te.value = h.value
+  const te = texteditor(), v = ve.getversion(o)
+  te.value = h.value; const rdo = !ve.leafversion(v)
+  if (rdo) { te.setreadonly() }
   te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
-  te.on('save', () => savefile(o, te.value))
-  const v = ve.getversion(o).verid.slice(0, 8)
-  const n = v + '/' + o.from[Object.keys(o.from)[0]].to[o.id].name
+  te.on('save', () => (ve.savefile(o, te.value),
+    cgd = false, tb.textContent = n))
+  const n = (rdo ? '🚫' : '') + v.verid.slice(0, 8) + '/' +
+    o.from[Object.keys(o.from)[0]].to[o.id].name
   const ext = n.split('.').pop()
   te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
   let cgd = false, askclose = () => {
-    const w = dom('span')
+    const w = dom('span'); tb.append(w)
     w.innerText = 'file not saved, really close?'
-    w.style.color = '#f00'
-    tb.append(w)
-    setTimeout(() => cgd = false)
+    w.style.color = '#f00'; cgd = false
   }
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
-  tb.setclosable(() => (cgd ? askclose() : 0, !cgd))
+  tb.setclosable((b = cgd) => (b ? askclose() : 0, !b))
   tb.on('focus', () => ve.vg.highlight(vo))
 }
 $.opence = ({ o }) => {
-
+  log(o)
 }
-$.opensb = () => {
+$.opensb = ({ o }) => {
+  log(o)
 }
 
 {
