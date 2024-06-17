@@ -1555,7 +1555,7 @@ document.body.append(sc)
 $.opente = ({ o }) => {
   const te = texteditor(), v = ve.getversion(o)
   te.value = ve.g[o.value].value
-  const rdo = v.lock; if (rdo) { te.setreadonly() }
+  if (v.lock) { te.setreadonly() }
   const sro = ({ o }) => (te.setreadonly(o.lock), tb.textContent = caln())
   ve.on('version lock change', sro)
   te.on('change', () => { cgd = true, tb.textContent = caln() })
@@ -1565,7 +1565,7 @@ $.opente = ({ o }) => {
     const w = dom('span'); tb.append(w)
     w.innerText = 'file not saved, really close?'
     w.style.color = '#f00'; cgd = false
-  }, caln = () => (rdo ? '🚫' : '') + v.id.slice(0, 8) + '/' +
+  }, caln = () => (v.lock ? '🚫' : '') + v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name + (cgd ? ' *' : '')
   const n = caln(), ext = n.split('.').pop()
   te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
