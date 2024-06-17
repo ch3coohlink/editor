@@ -52,10 +52,11 @@
   - [x] focus on file tab make cvs highlight file node
   - [ ] click on tab content also has the above behavior
   - [ ] no 'readonly' event is fired when version become readonly
-  - [ ] need event for 'file/path modification (write/rename/delete)'
+  - [x] need event for 'file/path modification (write/rename/delete)'
 - sandbox
   - [ ] load boot config file
   - [ ] polyfill setTimeout etc...
+  - [x] listen to file change then reload
   - [ ] worker sandbox
   - [ ] worker graphic
   - [ ] worker audio

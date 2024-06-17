@@ -1294,6 +1294,11 @@
         run: () => ($.wordWrap = wordWrap === "on" ? "off" : "on",
           editor.updateOptions({ wordWrap })),
       })
+      editor.addAction({
+        id: "format-code", label: "Format code",
+        keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.CtrlCmd | monaco.KeyCode.KeyF],
+        run: () => editor.getAction('editor.action.formatDocument').run(),
+      })
       $.setreadonly = (readOnly = true) => editor.updateOptions({ readOnly })
 
       $.change_language = l =>
@@ -1307,8 +1312,8 @@
       $.close = () => { parent.style.display = "none" }
     } return $
   }
-  $.sandboxtab = ($ = eventnode(dom())) => {
-    with ($) {
+  $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
+    $.vcs = vcs; $.target = target; with ($) {
       { // tab bar and basic style
         $.configtab = eventnode(dom())
         configtab.style.margin = '0px 5px'
@@ -1325,7 +1330,7 @@
         configtab.addEventListener('pointerdown', e => e.preventDefault())
         $.style.height = '100%'
         $.style.position = 'relative'
-      } $.vcs = $.target = $.path = false
+      } $.path = false
 
       const domdiv = dom(), clidiv = dom(), clictn = dom(); { // cli style
         clidiv.classList.add('no-scroll-bar')
@@ -1365,6 +1370,11 @@
       let vcsenventregisted = false, filechange
       const registerVCSevent = () =>
         vcs.on('file change', ({ o }) => filechange?.(o))
+      const configdescription = {
+        environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
+        module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
+        watchfile: { type: 'boolean', des: { true: '', false: '' } }
+      }
       $.exec = async () => {
         // TODO: read a config file
 
@@ -1406,7 +1416,8 @@
 
         const watch = new Set([target])
         if (!vcsenventregisted) { registerVCSevent() }
-        filechange = o => log(watch, o, watch.has(o))
+        const reload = debounce(() => $.exec(), 0)
+        filechange = o => watch.has(o) ? reload() : 0
 
         const load = p => {
           const { o, used } = vcs.read(path.version.id, p); watch.add(o)
@@ -1474,8 +1485,7 @@ $.opence = ({ o }) => {
   log(o)
 }
 $.opensb = ({ o }) => {
-  const sb = sandboxtab(), v = ve.getversion(o)
-  sb.vcs = ve, sb.target = o
+  const sb = sandboxtab(ve, o), v = ve.getversion(o)
   const n = v.verid.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name
   if (!dk3.parentNode) { createdk('top', v => dk3 = v) }
@@ -1537,7 +1547,7 @@ const { log } = console
 // log(null)
 // log(undefined)
 // log(new Date())
-// log(performance.now())
+log(performance.now())
 // log(Symbol('symbol'))
 log(await readfile('b/b.js'))
 log(await readfile('b/b/test'))
