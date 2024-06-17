@@ -1150,12 +1150,16 @@
       ])))
       $.togglernode = n => togglenode(tovnode(n))
       $.togglenode = vo => {
-        vo.open = !vo.open; if (!vo.open) { vg.deltree(vo.id, 1) } else {
-          const o = tornode(vo.id), c = o.children
-          for (const t in c) {
-            const e = o.to[c[t]], cvo = vg.addtonode(vo.id, e.name)
-            createfilenode(vo, e, e.o, cvo)
-          }
+        const o = tornode(vo.id); o.open = !o.open
+        if (!o.open) { vg.deltree(vo.id, 1) } else {
+          const recursive = vo => {
+            const o = tornode(vo.id); c = o.children
+            for (const t in c) {
+              const e = o.to[c[t]], cvo = vg.addtonode(vo.id, e.name)
+              createfilenode(vo, e, e.o, cvo)
+              if (e.o.type === 'dir' && e.o.open) { recursive(cvo) }
+            }
+          }; recursive(vo)
         }
       }
       $.setnodecolor = n => n.elm.path.setAttribute('fill', {
@@ -1282,9 +1286,8 @@
           } return data
         }
         $.deserialization = d => {
-          if (typeof d === 'string') { d = JSON.parse(d) } setdelay()
-          const es = [], order = 'version mergever dir link file hashobj'.split(' ')
-          for (const type of order) for (let o of d[type]) {
+          if (typeof d === 'string') { d = JSON.parse(d) } setdelay(); const es = []
+          for (const type in d) for (let o of d[type]) {
             o = { ...o }; const no = addnode(o.id), to = o.to
             delete o.id, delete o.to
             Object.assign(no, o); no.type = type
@@ -1293,7 +1296,11 @@
             e = { ...e }; const ne = addedge(id, e.o, e.name)
             delete e.o, delete e.name
             Object.assign(ne, e)
-          } enddelay()
+          } enddelay(); for (const id in g) {
+            const o = g[id]; if (o.type === 'version' && o.open) {
+              delete o.open; togglernode(o)
+            }
+          }
         }
       }
     } return $
@@ -1620,7 +1627,8 @@ $.opensb = ({ o }) => {
   const b = ve.newver(a).id
   ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
   ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
-  ve.writefile(ve.writedir(b, 'b').id, 'test', `test`, true)
+  const dira = ve.writedir(b, 'b').id
+  ve.writefile(dira, 'test', `test`, true)
   const c = ve.newver(a).id
   ve.writefile(c, 'a.js', `aaa\nggg\nccc`, true)
   ve.writelink(c, 'b', b)
@@ -1631,15 +1639,9 @@ $.opensb = ({ o }) => {
   ve.togglernode(b)
   ve.togglernode(c)
   ve.togglernode(d)
+  ve.togglernode(dira)
 }
 
 const data = ve.serialization()
 ve.clear()
 ve.deserialization(data)
-
-for (const k in ve.g) {
-  const o = ve.g[k]
-  if (o.type === 'version' || o.type === 'mergever') {
-    log(o.lock)
-  }
-}

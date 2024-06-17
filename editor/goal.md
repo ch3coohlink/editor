@@ -41,7 +41,7 @@
   - [ ] redesign panel resizing mechanism
   - [ ] last active panel
 - [ ] folder open/close identifier
-- [ ] record open state in git graph
+- [x] record open state in git graph
 - [x] serialization
 - [ ] save file to disk
 - [ ] conflict editor
