@@ -1375,14 +1375,64 @@
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
         watchfile: { type: 'boolean', des: { true: '', false: '' } }
       }
+
+      const timeout_functions = `requestIdleCallback cancelIdleCallback,
+      requestAnimationFrame cancelAnimationFrame,
+      setTimeout clearTimeout, setInterval clearInterval`.split(",")
+        .map(s => s.split(/\s+/).filter(v => v))
+      const deconstructors = {
+        AudioContext: v => v.close(),
+        Worker: v => v.terminate(),
+      }, callbacks = {}, packedinstances = {}
+      const gen_timeout = ($ = {}) => {
+        for (const [s, c] of timeout_functions) {
+          const sf = window[s]//.bind(window)
+          const cf = window[c]//.bind(window)
+          let cbs = new Set; callbacks[c] = cbs; cbs.cf = cf
+          o[s] = s !== "setInterval" ? (f, t) => {
+            const i = sf(() => (cbs.delete(i), f()), t); cbs.add(i); return i
+          } : (f, t) => { const i = sf(f, t); cbs.add(i); return i }
+          o[c] = i => (cbs.delete(i), cf(i))
+        } return o
+      }, timeoutfunctions = gen_timeout()
+      gen_timeout.clear = () => {
+        for (const k in callbacks) {
+          const cbs = callbacks[k], cf = callbacks[k].cf
+          for (const v of cbs) { cf(v) } cbs.clear()
+        }
+      }
+      const pack_constructor = ($ = {}) => {
+        for (const k in deconstructors) {
+          const f = window[k], a = packedinstances[k] = []; $[k] = function (...v
+          ) { const o = new f(...v), r = new WeakRef(o); a.push(r); return r }
+        } return $
+      }, constructorpacker = pack_constructor()
+      pack_constructor.clear = () => {
+        for (const k in packedinstances) {
+          const f = deconstructors[k], a = packedinstances[k]
+          a.forEach(r => (r = r.deref(), r ? f(r) : 0)); a.splice(0, a.length)
+        }
+      }
+
+      $.clear = () => {
+        domdiv.innerHTML = ''
+        clictn.innerHTML = ''
+        gen_timeout.clear()
+        pack_constructor.clear()
+      }
+
       $.exec = async () => {
         // TODO: read a config file
 
-        domdiv.innerHTML = ''
-        clictn.innerHTML = ''
+        clear()
+
         if (!path) { path = vcs.getpath(target) }
         const ver = path.version
-        const env = { root: domdiv }
+
+        const domctn = dom(); domdiv.append(domctn)
+        const shadowroot = domctn.attachShadow({ mode: 'open' })
+        const root = dom(); shadowroot.append(root)
+        const env = { root, ...timeoutfunctions, ...constructorpacker }
 
         let logd, nolog = false, _error = (nodup, ...a) => (
           nodup ? nolog = true : 0, _log(...a), nolog = false,
@@ -1410,9 +1460,11 @@
             } d.append(s = dom('span')), s.textContent = format(a[l])
             clictn.append(d); logd = d
           } catch (e) { _error(false, 'console.log failed to print log'); console.error(e) }
-        }, clear = () => { clictn.innerHTML = '' }
-        env.originconsole = console
-        env.console = { log: _log, clear, error: (...a) => _error(false, ...a) }
+        }, _clear = () => { clictn.innerHTML = '' }
+        env.originconsole = console, env.console = {
+          log: _log, clear: _clear,
+          error: (...a) => _error(false, ...a)
+        }
 
         const watch = new Set([target])
         if (!vcsenventregisted) { registerVCSevent() }

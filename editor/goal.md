@@ -55,7 +55,7 @@
   - [x] need event for 'file/path modification (write/rename/delete)'
 - sandbox
   - [ ] load boot config file
-  - [ ] polyfill setTimeout etc...
+  - [x] polyfill setTimeout etc...
   - [x] listen to file change then reload
   - [ ] worker sandbox
   - [ ] worker graphic
@@ -65,7 +65,7 @@
   - [x] toggle cli
   - [x] log format for some basic js type
     - [x] but will fail to format a proxy
-      - it's ok, just rememeber to prevent crashing
+      - [x] it's ok, just rememeber to prevent console.log crashing
   - [ ] log length limit
   - [ ] cli scroll bar
   - [ ] automatic cli scroll when scrolled to end
