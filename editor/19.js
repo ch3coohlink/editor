@@ -540,8 +540,8 @@
       }
       $.addedge = (a, b, n) => {
         const o = { o: g[b] }; if (n) { o.name = n, g[a].children[n] = b }
-        g[a].to[b] = o, g[b].from[a] = g[a]
-        g[a].nto++, g[b].nfrom++, emit('addedge', { a, b, o })
+        g[a].to[b] = o, g[b].from[a] = g[a], g[a].nto++, g[b].nfrom++
+        emit('addedge', { a, b, o }); return o
       }
       $.deledge = (a, b) => {
         let o = g[a].to[b], n = o.name; if (n) { delete g[a].children[n] }
@@ -632,9 +632,9 @@
       $.newver = (p, b = p !== undefined) => {
         if (b && g[p] && g[p].type !== 'version') {
           throw `privous node is not a vcs version: ${p}`
-        } setdelay(); o = b ? addtonode(p) : addnode()
-        o.type = 'version', o.verid = uuid()
-        if (b) { copytree(p, o.id), g[p].lock = true }
+        } setdelay(); const id = uuid()
+        o = b ? addtonode(p, _, id) : addnode(id); o.type = 'version'
+        if (b) { copytree(p, o.id), setlock(g[p]) } else { o.isroot = 1 }
         emit('newver', { p, pb: b, o }); enddelay(); return o
       }
       $.nodeancester = n => {
@@ -677,17 +677,17 @@
         } return r
       }
       $.merge = (a, b) => {
-        if (!g[a]) { throw `non exist node: ${a}` }
-        if (!g[b]) { throw `non exist node: ${b}` }
-        let os = [...lcas(a, b)], o = os[0] // TODO: multi ancester merge
-        const r = diffver(g[a], g[b], g[o]); setdelay()
-        const m = addtonode(a); addedge(b, m.id)
-        m.verid = uuid(), m.type = 'mergever', m.value = r
-        emit('merge', { a, b, o: m }); enddelay()
+        setdelay(); const m = addtonode(a, _, uuid())
+        addedge(b, m.id); setlock(g[a]), setlock(g[b])
+        m.type = 'mergever'; emit('merge', { a, b, o: m }); enddelay()
       }
       $.leafversion = v => v.nto - Object.keys(v.children).length <= 0
       $.checkversion = (o, v = getversion(o)) => {
-        if (!leafversion(v)) { throw new Error('Invalid operation on a non-leaf version.') }
+        if (v.lock) { throw new Error('Invalid operation on a non-leaf version.') }
+      }
+      $.setlock = (o, f = true) => {
+        if (f) { o.lock = 1 } else { delete o.lock }
+        emit('version lock change', { o })
       }
       $.getversion = n => {
         while (n.type !== 'version' && n.type !== 'mergever') { n = getfrom(n) } return n
@@ -1008,9 +1008,8 @@
       on('addnode', ({ o }) => {
         if (o.type === 'version' || o.type === 'mergever') {
           let vo = vg.addnode()
-          vo.name = o.verid.slice(0, 8)
-          vo.open = false
-          vo.type = o.nfrom === 0 ? 'rootver' : o.type
+          vo.name = o.id.slice(0, 8); vo.open = false
+          vo.type = o.isroot ? 'rootver' : o.type
           postaddnode(vo, o)
         } else if (o.type !== 'hashobj') {
           const p = getfrom(o), vp = tovnode(p)
@@ -1031,8 +1030,8 @@
       }), on('clear', () => vg.clear())
       on('addtonode', ({ p, o }) => (p = tovnode(p), o = tovnode(o),
         p && o ? vg.emit('addtonode', { p, o }) : 0))
-      $.tovnode = n => vg.g[nodemap.get(n.id ?? n)]
-      $.tornode = n => g[nodemap.getr(n.id ?? n)]
+      $.tovnode = n => vg.g[nodemap.get(typeof n === 'object' ? n.id : n)]
+      $.tornode = n => g[nodemap.getr(typeof n === 'object' ? n.id : n)]
       const postaddnode = (vo, o) =>
         vo ? (nodemap.set(o.id, vo.id), setnodecolor(vo)) : 0
       const createfilenode = (p, edge, o, vo) => {
@@ -1041,22 +1040,29 @@
           let sl = vo.elm.softlink; if (!sl) {
             vg.seex.append(sl = vo.elm.softlink = svg('path'))
             sl.setAttribute('fill', 'none')
-            sl.setAttribute('stroke', vg.highlightcolor)
             sl.setAttribute('stroke-width', vg.linewidth + 'px')
+            sl.setAttribute('stroke-dasharray', '1, 3.2')
             sl.setAttribute('stroke-linecap', 'round')
-            sl.setAttribute('stroke-dasharray', '1, 3.5')
             sl.setAttribute('opacity', '0.8')
             sl.style.pointerEvents = 'none'
-          } let { x, y } = vo.data.pos, bp = b.data.pos
-          let dx = bp.x - x, dy = bp.y - y, c = vg.circlesize / 7 * 5
-          let mx = x + dx * 0.5, my = y + dy * 0.5
-          let l = 1 / Math.sqrt(dx * dx + dy * dy) * c; dx *= l, dy *= l
-          sl.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
-            `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+          } if (b) {
+            sl.setAttribute('stroke', vg.highlightcolor)
+            let { x, y } = vo.data.pos, bp = b.data.pos
+            let dx = bp.x - x, dy = bp.y - y, c = vg.circlesize / 7 * 5
+            let mx = x + dx * 0.5, my = y + dy * 0.5
+            let l = 1 / Math.sqrt(dx * dx + dy * dy) * c; dx *= l, dy *= l
+            sl.setAttribute('d', `M ${x} ${y} L ${bp.x} ${bp.y} ` +
+              `M ${mx + dy} ${my - dx} L ${mx + dx} ${my + dy} L ${mx - dy} ${my + dx}`)
+          } else {
+            sl.setAttribute('stroke', 'red')
+            let { x, y } = vo.data.pos, c = vg.circlesize / 7 * 5
+            sl.setAttribute('d', `M ${x - c} ${y - c} L ${x + c} ${y + c} ` +
+              `M ${x - c} ${y + c} L ${x + c} ${y - c}`)
+          }
         } : 0; updatename(o, vo, edge); postaddnode(vo, o)
       }, updatename = (o, vo, edge) => {
         if (o.type === 'link') {
-          vo.name = edge.name + ' | ' + g[o.value].verid.slice(0, 8)
+          vo.name = edge.name + ' | ' + o.value.slice(0, 8)
         } else { vo.name = edge.name }
       }, packnotify = a => a.map(([n, f]) => [n, async (...a) => {
         try { await f(...a) } catch (e) { if (e !== userend) { makeerrornotify(e) } }
@@ -1071,7 +1077,12 @@
         o.value = h; emit('file change', { o }); enddelay(); return o
       }
       $.execfile = o => emit('boot sandbox', { o })
-      $.solveconflict = o => emit('boot conflict editor', { o })
+      $.solveconflict = o => {
+        // TODO: conflict solving
+        // let os = [...lcas(a, b)], o = os[0] // TODO: multi ancester merge
+        // const r = diffver(g[a], g[b], g[o])
+        emit('boot conflict editor', { o })
+      }
       $.setnodepos = (e, n) => setTimeout(() => tovnode(n).data.pos =
         vg.screen2svgcoord()(...vg.geteventlocation(e)))
       $.checkisversion = (o, b = o?.type !== 'version') => {
@@ -1110,7 +1121,10 @@
           renameedge(getfrom(o).id, o.id, n)
           emit('file change', { o })
         }, deletever = async () => {
-          checkversion(o); await deleteversiondialog(); deltree(o.id)
+          checkversion(o); await deleteversiondialog()
+          for (const k in o.from) {
+            const p = o.from[k]; if (!leafversion(p)) { setlock(p, false) }
+          } deltree(o.id)
         }, deletenode = async () => {
           if (o.type === 'dir') { deltree(o.id) } else { delnode(o.id) }
         }; switch (o.type) {
@@ -1254,6 +1268,33 @@
         $.makeerrornotify = m => {
           console.error(m)
         }
+      } { // serialization
+        $.serialization = (data = {}) => {
+          data.version = [], data.mergever = [], data.file = [], data.dir = []
+          data.link = [], data.hashobj = []; for (const k in g) {
+            const oo = g[k], o = { ...oo }, to = [], oto = oo.to
+            for (const id in oto) {
+              const oe = oto[id], e = { ...oe }
+              e.o = oe.o.id; to.push(e)
+            } o.to = to, delete o.from, delete o.children
+            delete o.nto, delete o.nfrom, delete o.type
+            data[oo.type].push(o)
+          } return data
+        }
+        $.deserialization = d => {
+          if (typeof d === 'string') { d = JSON.parse(d) } setdelay()
+          const es = [], order = 'version mergever dir link file hashobj'.split(' ')
+          for (const type of order) for (let o of d[type]) {
+            o = { ...o }; const no = addnode(o.id), to = o.to
+            delete o.id, delete o.to
+            Object.assign(no, o); no.type = type
+            for (const e of to) { es.push([no.id, e]) }
+          } for (let [id, e] of es) {
+            e = { ...e }; const ne = addedge(id, e.o, e.name)
+            delete e.o, delete e.name
+            Object.assign(ne, e)
+          } enddelay()
+        }
       }
     } return $
   }
@@ -1368,13 +1409,15 @@
       } $.append(domdiv, clidiv)
 
       let vcsenventregisted = false, filechange
-      const registerVCSevent = () =>
-        vcs.on('file change', ({ o }) => filechange?.(o))
+      const _fchd = ({ o }) => filechange?.(o)
+      const registerVCSevent = () => vcs.on('file change', _fchd)
+      const unregisterVCSevent = () => vcs.off('file change', _fchd)
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
         watchfile: { type: 'boolean', des: { true: '', false: '' } }
       }
+      // TODO: config panel
 
       const timeout_functions = `requestIdleCallback cancelIdleCallback,
         requestAnimationFrame cancelAnimationFrame,
@@ -1485,7 +1528,7 @@
             if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
           } path = b.filter(v => v).join('/'); return path
         }, exec = async (path, src, v = ver) => (loaded.add(path), await (
-          new AF('$', `//# sourceURL=${v.verid.slice(0, 8) + '/' + path}\n` +
+          new AF('$', `//# sourceURL=${v.id.slice(0, 8) + '/' + path}\n` +
             `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
             `const readfile = $.__readfile(__dirname)\n` +
             `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)))
@@ -1512,22 +1555,24 @@ document.body.append(sc)
 $.opente = ({ o }) => {
   const te = texteditor(), v = ve.getversion(o)
   te.value = ve.g[o.value].value
-  const rdo = !ve.leafversion(v); if (rdo) { te.setreadonly() }
-  te.on('change', () => { cgd = true, tb.textContent = n + ' *' })
+  const rdo = v.lock; if (rdo) { te.setreadonly() }
+  const sro = ({ o }) => (te.setreadonly(o.lock), tb.textContent = caln())
+  ve.on('version lock change', sro)
+  te.on('change', () => { cgd = true, tb.textContent = caln() })
   te.on('save', () => (ve.savefile(o, te.value),
-    cgd = false, tb.textContent = n))
-  const n = (rdo ? '🚫' : '') + v.verid.slice(0, 8) + '/' +
-    o.from[Object.keys(o.from)[0]].to[o.id].name
-  const ext = n.split('.').pop()
-  te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
+    cgd = false, tb.textContent = caln()))
   let cgd = false, askclose = () => {
     const w = dom('span'); tb.append(w)
     w.innerText = 'file not saved, really close?'
     w.style.color = '#f00'; cgd = false
-  }
+  }, caln = () => (rdo ? '🚫' : '') + v.id.slice(0, 8) + '/' +
+    o.from[Object.keys(o.from)[0]].to[o.id].name + (cgd ? ' *' : '')
+  const n = caln(), ext = n.split('.').pop()
+  te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
-  tb.setclosable((b = cgd) => (b ? askclose() : 0, !b))
+  tb.setclosable((b = cgd) => (
+    b ? askclose() : ve.off('version lock change', sro), !b))
   const f = () => ve.vg.highlight(ve.tovnode(o))
   tb.on('focus', f); f()
   return te
@@ -1537,7 +1582,7 @@ $.opence = ({ o }) => {
 }
 $.opensb = ({ o }) => {
   const sb = sandboxtab(ve, o), v = ve.getversion(o)
-  const n = v.verid.slice(0, 8) + '/' +
+  const n = v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name
   if (!dk3.parentNode) { createdk('top', v => dk3 = v) }
   const tab = dom(), tbt = dom('span')
@@ -1548,7 +1593,7 @@ $.opensb = ({ o }) => {
   tab.style.height = '100%'
   tab.append(tbt, sb.configtab)
   const tb = dk3.adddock(sb, tab)
-  tb.setclosable(() => true)
+  tb.setclosable(() => { sb.unregisterVCSevent(); return true })
   const f = () => ve.vg.highlight(ve.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
   return sb
@@ -1581,44 +1626,20 @@ $.opensb = ({ o }) => {
   ve.writelink(c, 'b', b)
   ve.merge(b, c)
   const d = ve.newver(c).id
-  const e = ve.writefile(d, 'a.js',
-    `root.innerHTML = 'HELLO HTML '.repeat(300)
-const { log } = console
-// log('hello sandbox')
-// log(__dirname)
-// log(readfile)
-// log({ a: 1, b: {} })
-// log({})
-// log(new Set)
-// log(new Proxy(new Set, {}))
-// log(new Proxy(document, {})) // this fails
-// // this is ok
-// // log(new Proxy(document, { get: (o,k) => o[k] }))
-// // log(document)
-// log(null)
-// log(undefined)
-// log(new Date())
-log(performance.now())
-// log(Symbol('symbol'))
-log(await readfile('b/b.js'))
-log(await readfile('b/b/test'))
-log(await readfile('b/../b/b.js'))
-log(await readfile('b/../b/b/test'))
-log(await readfile('b/../b/b/../b/test'))
-// log(BigInt(123))
-// log(...new Array(50).fill('hello sandbox'))
-// log(new Array(50).fill('hello sandbox'))
-// log(Error('error'))
-// console.error(Error('test error'))
-// const wait = t => new Promise(r => setTimeout(r, t))
-// await wait(500)
-// throw Error('real error')
-`, true)
+  ve.writelink(d, 'c', 'fdsafdfadfafarfsdfas')
   ve.togglernode(a)
   ve.togglernode(b)
   ve.togglernode(c)
   ve.togglernode(d)
-  opente({ o: e })
-  const sb = opensb({ o: e })
-  setTimeout(sb.togglecli, 100)
+}
+
+const data = ve.serialization()
+ve.clear()
+ve.deserialization(data)
+
+for (const k in ve.g) {
+  const o = ve.g[k]
+  if (o.type === 'version' || o.type === 'mergever') {
+    log(o.lock)
+  }
 }

@@ -16,6 +16,8 @@
 - [x] better node click detection (allow small dragging amount)
 - [x] change file overwrite behaviour
 - [x] soft link in graph layout
+  - [x] fix situation where link target not exists
+  - [ ] maybe allow link point to directory
 - [x] git editor ui
   - [x] set camera home position
   - [x] new version
@@ -40,7 +42,7 @@
   - [ ] last active panel
 - [ ] folder open/close identifier
 - [ ] record open state in git graph
-- [ ] serialization
+- [x] serialization
 - [ ] save file to disk
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
@@ -51,7 +53,7 @@
   - [ ] file delete
   - [x] focus on file tab make cvs highlight file node
   - [ ] click on tab content also has the above behavior
-  - [ ] no 'readonly' event is fired when version become readonly
+  - [x] no 'readonly' event is fired when version become readonly
   - [x] need event for 'file/path modification (write/rename/delete)'
 - sandbox
   - [ ] load boot config file
@@ -67,5 +69,6 @@
     - [x] but will fail to format a proxy
       - [x] it's ok, just rememeber to prevent console.log crashing
   - [ ] log length limit
+  - [ ] eval
   - [ ] cli scroll bar
   - [ ] automatic cli scroll when scrolled to end
