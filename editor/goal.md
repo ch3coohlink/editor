@@ -17,7 +17,7 @@
 - [x] change file overwrite behaviour
 - [x] soft link in graph layout
   - [x] fix situation where link target not exists
-  - [ ] maybe allow link point to directory
+  - [ ] maybe allow link point to directory (?)
 - [x] git editor ui
   - [x] set camera home position
   - [x] new version
