@@ -40,7 +40,7 @@
   - [x] resizing bar
   - [ ] redesign panel resizing mechanism
   - [ ] last active panel
-- [ ] folder open/close identifier
+- [x] folder open/close identifier
 - [x] record open state in git graph
 - [x] serialization
 - [ ] save file to disk

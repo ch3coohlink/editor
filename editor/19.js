@@ -1007,13 +1007,12 @@
       $.vg = graphlayout(), $.nodemap = bimap()
       on('addnode', ({ o }) => {
         if (o.type === 'version' || o.type === 'mergever') {
-          let vo = vg.addnode()
-          vo.name = o.id.slice(0, 8); vo.open = false
+          let vo = vg.addnode(); vo.name = o.id.slice(0, 8)
           vo.type = o.isroot ? 'rootver' : o.type
           postaddnode(vo, o)
         } else if (o.type !== 'hashobj') {
           const p = getfrom(o), vp = tovnode(p)
-          if (vp && vp.open) { createfilenode(vp, p.to[o.id], o, vg.addnode()) }
+          if (vp && p.open) { createfilenode(vp, p.to[o.id], o, vg.addnode()) }
         }
       })
       on('delnode', ({ o }, vo = tovnode(o)) => {
@@ -1067,10 +1066,8 @@
       }, packnotify = a => a.map(([n, f]) => [n, async (...a) => {
         try { await f(...a) } catch (e) { if (e !== userend) { makeerrornotify(e) } }
       }])
-      $.openfile = (o, vo = tovnode(o)) => {
-
+      $.openfile = (o, vo = tovnode(o)) =>
         emit('boot text editor', { o })
-      }
       $.savefile = (o, t, h = hexenc(sha256(t))) => {
         checkversion(o); setdelay(); deledge(o.id, o.value)
         if (!g[h]) { addhashobj(h, t) } addedge(o.id, h)
@@ -1098,13 +1095,13 @@
       })
       vg.on('nodectxmenu', ({ o: vo, e }) => {
         let a, o = tornode(vo); const toggle = () => togglenode(vo)
-        const open = () => { if (!vo.open) { toggle() } }
+        const open = () => { if (!o.open) { toggle() } }
         const newfile = async () => {
-          checkversion(o); writefile(o.id, await namingdialog(), ''); open()
-          emit('file change', { o })
+          checkversion(o); writefile(o.id, await namingdialog(), '')
+          open(); emit('file change', { o })
         }, newdir = async () => {
-          checkversion(o); writedir(o.id, await namingdialog()); open()
-          emit('file change', { o })
+          checkversion(o); writedir(o.id, await namingdialog())
+          open(); emit('file change', { o })
         }, newlink = async () => {
           checkversion(o); const n = await namingdialog(); checkname(n)
           const t = tornode(await pickonedialog()); checkisversion(t)
@@ -1150,10 +1147,21 @@
       ])))
       $.togglernode = n => togglenode(tovnode(n))
       $.togglenode = vo => {
-        const o = tornode(vo.id); o.open = !o.open
-        if (!o.open) { vg.deltree(vo.id, 1) } else {
+        const o = tornode(vo); o.open = !o.open
+        if (!o.open) {
+          vo.elm.foldidentifer?.remove()
+          delete vo.elm.foldidentifer
+          vg.deltree(vo.id, 1)
+        } else {
           const recursive = vo => {
-            const o = tornode(vo.id); c = o.children
+            const o = tornode(vo); c = o.children
+            const i = vo.elm.foldidentifer = svg('path')
+            i.style.pointerEvents = 'none'
+            const w = vg.circlesize / 7 * 3
+            i.setAttribute('stroke', vg.forecolor)
+            i.setAttribute('stroke-width', vg.linewidth + 'px')
+            i.setAttribute('d', `M ${0} ${-w} L ${0} ${w} M ${-w} ${0} L ${w} ${0} `)
+            vo.elm.append(i)
             for (const t in c) {
               const e = o.to[c[t]], cvo = vg.addtonode(vo.id, e.name)
               createfilenode(vo, e, e.o, cvo)
@@ -1298,8 +1306,8 @@
             Object.assign(ne, e)
           } enddelay(); for (const id in g) {
             const o = g[id]; if (o.type === 'version' && o.open) {
-              delete o.open; togglernode(o)
-            }
+              togglernode(o); togglernode(o)
+            } // is this too dumb? Didn't find better way
           }
         }
       }
@@ -1642,6 +1650,8 @@ $.opensb = ({ o }) => {
   ve.togglernode(dira)
 }
 
-const data = ve.serialization()
-ve.clear()
-ve.deserialization(data)
+setTimeout(() => {
+  const data = ve.serialization()
+  ve.clear()
+  ve.deserialization(data)
+}, 2000)
