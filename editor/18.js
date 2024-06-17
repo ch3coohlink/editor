@@ -575,22 +575,23 @@
   }
   $.vcs = ($ = graph()) => {
     with ($) {
-      $.locatebypath = (node, path = '') => {
+      $.locatebypath = (id, path = '') => {
         if (!Array.isArray(path)) { path = path.split('/') }
-        let n = node, name; while (path.length > 0) {
-          let t = g[n].type
-          if (t === 'link') { n = g[n].value }
-          name = path.shift(); if (name === '.') { continue }
+        const links = [], used = new Set
+        let o = g[id], name, p; while (path.length > 0) {
+          const t = o.type; if (t === 'link') {
+            used.add(o); p ? links.push(p) : 0; p = o; o = g[o.value]
+          } name = path.shift(); if (name === '.') { continue }
           else if (name === '..') {
-            if (n.nfrom !== 1) { throw `invalid path: ${path}` }
-            n = n.from[Object.keys(n.from)[0]]
+            if (t !== 'version') { used.add(o); p = o; o = getfrom(o) }
+            else if (links.length > 1) { p = o; o = links.pop() }
+            else { throw Error(`Invalid path: "${path}"`) }
           } else {
-            n = g[n].children[name]
-            if (!n) { throw `invalid path: ${path}` }
+            used.add(o); p = o; o = g[o.children[name]]
+            if (!o) { throw Error(`Invalid path: "${path}"`) }
           }
-        } return n
-      }
-      $.read = (ver, path) => g[locatebypath(ver, path)]
+        } return { o, used }
+      }; $.read = locatebypath
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
       }
@@ -600,16 +601,18 @@
       }
       $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
-        if (!g[h]) { addhashobj(h, text) } addedge(b.id, h)
-        b.type = 'file', b.value = h; enddelay(); return b
+        if (!g[h]) { addhashobj(h, text) }
+        addedge(b.id, h); b.type = 'file', b.value = h;
+        emit('file change', { o: b }); enddelay(); return b
       }
       $.writedir = (loc, name, force) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
-        b.type = 'dir'; enddelay(); return b
+        b.type = 'dir'; emit('file change', { o: b }); enddelay(); return b
       }
       $.writelink = (loc, name, ref, force) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
-        b.type = 'link', b.value = ref; enddelay(); return b
+        b.type = 'link', b.value = ref
+        emit('file change', { o: b }); enddelay(); return b
       }
       const copytree = (a, b) => {
         const c = g[a].children
@@ -687,7 +690,7 @@
         if (!leafversion(v)) { throw new Error('Invalid operation on a non-leaf version.') }
       }
       $.getversion = n => {
-        while (n.type !== 'version') { n = getfrom(n) } return n
+        while (n.type !== 'version' && n.type !== 'mergever') { n = getfrom(n) } return n
       }
       $.getpath = n => {
         const p = []; while (n.type !== 'version') {
@@ -695,8 +698,6 @@
           p.unshift(n.to[on.id].name)
         } return { version: n, path: p }
       }
-      $.writedes = (id, text) => { g[id].description = text }
-      $.readdes = id => delete g[id].description
     } return $
   }
   const itp = (a, b, t) => (t = clamp(t, 0, 1), a + t * (b - a))
@@ -1016,7 +1017,10 @@
           if (vp && vp.open) { createfilenode(vp, p.to[o.id], o, vg.addnode()) }
         }
       })
-      on('delnode', ({ o }, vo = tovnode(o)) => vo ? vg.delnode(vo.id) : 0)
+      on('delnode', ({ o }, vo = tovnode(o)) => {
+        if (vo) { vg.delnode(vo.id) }
+        if (o.type === 'file') { emit('file change', { o }) }
+      })
       on('addedge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
         a && b ? vg.addedge(a.id, b.id, o.name) : 0))
       on('deledge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
@@ -1054,8 +1058,8 @@
         if (o.type === 'link') {
           vo.name = edge.name + ' | ' + g[o.value].verid.slice(0, 8)
         } else { vo.name = edge.name }
-      }, packnotify = a => a.map(([n, f]) => [n, (...a) => {
-        try { f(...a) } catch (e) { if (e !== userend) { makeerrornotify(e) } }
+      }, packnotify = a => a.map(([n, f]) => [n, async (...a) => {
+        try { await f(...a) } catch (e) { if (e !== userend) { makeerrornotify(e) } }
       }])
       $.openfile = (o, vo = tovnode(o)) => {
 
@@ -1064,7 +1068,7 @@
       $.savefile = (o, t, h = hexenc(sha256(t))) => {
         checkversion(o); setdelay(); deledge(o.id, o.value)
         if (!g[h]) { addhashobj(h, t) } addedge(o.id, h)
-        o.value = h; enddelay(); return o
+        o.value = h; emit('file change', { o }); enddelay(); return o
       }
       $.execfile = o => emit('boot sandbox', { o })
       $.solveconflict = o => emit('boot conflict editor', { o })
@@ -1086,15 +1090,17 @@
         const open = () => { if (!vo.open) { toggle() } }
         const newfile = async () => {
           checkversion(o); writefile(o.id, await namingdialog(), ''); open()
+          emit('file change', { o })
         }, newdir = async () => {
           checkversion(o); writedir(o.id, await namingdialog()); open()
+          emit('file change', { o })
         }, newlink = async () => {
           checkversion(o); const n = await namingdialog(); checkname(n)
           const t = tornode(await pickonedialog()); checkisversion(t)
-          writelink(o.id, n, t.id); open()
+          writelink(o.id, n, t.id); open(); emit('file change', { o })
         }, relink = async () => {
           checkversion(o); const t = tornode(await pickonedialog()); checkisversion(t)
-          o.value = t.id; vo.customdraw()
+          o.value = t.id; vo.customdraw(); emit('file change', { o })
         }, mergever = async () => {
           const t = tornode(await pickonedialog()); checkisversion(t)
           merge(o.id, t.id)
@@ -1102,6 +1108,7 @@
           checkversion(o); const on = getfrom(o).to[o.id].name
           const n = await namingdialog(on); checkname(n)
           renameedge(getfrom(o).id, o.id, n)
+          emit('file change', { o })
         }, deletever = async () => {
           checkversion(o); await deleteversiondialog(); deltree(o.id)
         }, deletenode = async () => {
@@ -1302,22 +1309,23 @@
   }
   $.sandboxtab = ($ = eventnode(dom())) => {
     with ($) {
-      $.configtab = eventnode(dom())
-      configtab.style.margin = '0px 5px'
-      configtab.style.display = 'flex'
-      configtab.style.cursor = 'initial'
-      const bs = '▶️ 🧾 ⚙️'.split(' ').map(b => {
-        b = btn(b, 'none'), b.style.padding = '0'
-        b.style.height = b.style.width = '20px'
-        b.style.fontSize = '10px'; return b
-      }); configtab.append(...bs)
-      bs[0].onclick = () => exec()
-      bs[1].onclick = () => togglecli()
-      bs[2].onclick = () => log('need implement')
-      configtab.addEventListener('pointerdown', e => e.preventDefault())
-      $.style.height = '100%'
-      $.style.position = 'relative'
-      $.vcs = $.target = $.path = false
+      { // tab bar and basic style
+        $.configtab = eventnode(dom())
+        configtab.style.margin = '0px 5px'
+        configtab.style.display = 'flex'
+        configtab.style.cursor = 'initial'
+        const bs = '▶️ 🧾 ⚙️'.split(' ').map(b => {
+          b = btn(b, 'none'), b.style.padding = '0'
+          b.style.height = b.style.width = '20px'
+          b.style.fontSize = '10px'; return b
+        }); configtab.append(...bs)
+        bs[0].onclick = () => exec()
+        bs[1].onclick = () => togglecli()
+        bs[2].onclick = () => log('need implement')
+        configtab.addEventListener('pointerdown', e => e.preventDefault())
+        $.style.height = '100%'
+        $.style.position = 'relative'
+      } $.vcs = $.target = $.path = false
 
       const domdiv = dom(), clidiv = dom(), clictn = dom(); { // cli style
         clidiv.classList.add('no-scroll-bar')
@@ -1350,19 +1358,22 @@
         clidiv.style.whiteSpace = 'pre-wrap'
         clictn.style.maxWidth = '1000px'
         domdiv.style.height = '100%'
+        domdiv.style.overflow = 'auto'
         togglecli()
       } $.append(domdiv, clidiv)
+
+      let vcsenventregisted = false, filechange
+      const registerVCSevent = () =>
+        vcs.on('file change', ({ o }) => filechange?.(o))
       $.exec = async () => {
         // TODO: read a config file
+
         domdiv.innerHTML = ''
+        clictn.innerHTML = ''
         if (!path) { path = vcs.getpath(target) }
         const ver = path.version
+        const env = { root: domdiv }
 
-        let env = { root: domdiv }, load = p => {
-          const o = vcs.read(path.version.id, p)
-          if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
-          return vcs.g[o.value].value
-        }
         let logd, nolog = false, _error = (nodup, ...a) => (
           nodup ? nolog = true : 0, _log(...a), nolog = false,
           logd.style.textShadow = 'red 0px 0px 4px')
@@ -1389,8 +1400,20 @@
             } d.append(s = dom('span')), s.textContent = format(a[l])
             clictn.append(d); logd = d
           } catch (e) { _error(false, 'console.log failed to print log'); console.error(e) }
-        }, clear = () => { clictn.innerHTML = '' }; clear()
+        }, clear = () => { clictn.innerHTML = '' }
+        env.originconsole = console
         env.console = { log: _log, clear, error: (...a) => _error(false, ...a) }
+
+        const watch = new Set([target])
+        if (!vcsenventregisted) { registerVCSevent() }
+        filechange = o => log(watch, o, watch.has(o))
+
+        const load = p => {
+          const { o, used } = vcs.read(path.version.id, p); watch.add(o)
+            ;[...used].forEach(v => watch.add(v))
+          if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
+          return vcs.g[o.value].value
+        }
         env.__readfile = b => p => load(solvepath(b, p))
         env.__require = b => async (ph, p = solvepath(b, ph)) =>
           loaded.has(p) ? undefined : await exec(p, await load(p))
@@ -1500,37 +1523,41 @@ $.opensb = ({ o }) => {
   const e = ve.writefile(d, 'a.js',
     `root.innerHTML = 'HELLO HTML '.repeat(300)
 const { log } = console
-log('hello sandbox')
-log(__dirname)
-log(readfile)
-log({ a: 1, b: {} })
-log({})
-log(new Set)
-log(new Proxy(new Set, {}))
-log(new Proxy(document, {})) // this fails
-// this is ok
-// log(new Proxy(document, { get: (o,k) => o[k] }))
-// log(document)
-log(null)
-log(undefined)
-log(new Date())
-log(performance.now())
-log(Symbol('symbol'))
+// log('hello sandbox')
+// log(__dirname)
+// log(readfile)
+// log({ a: 1, b: {} })
+// log({})
+// log(new Set)
+// log(new Proxy(new Set, {}))
+// log(new Proxy(document, {})) // this fails
+// // this is ok
+// // log(new Proxy(document, { get: (o,k) => o[k] }))
+// // log(document)
+// log(null)
+// log(undefined)
+// log(new Date())
+// log(performance.now())
+// log(Symbol('symbol'))
 log(await readfile('b/b.js'))
 log(await readfile('b/b/test'))
-log(BigInt(123))
-log(...new Array(50).fill('hello sandbox'))
-log(new Array(50).fill('hello sandbox'))
-log(Error('error'))
-console.error(Error('test error'))
-const wait = t => new Promise(r => setTimeout(r, t))
-await wait(500)
-throw Error('real error')`, true)
+log(await readfile('b/../b/b.js'))
+log(await readfile('b/../b/b/test'))
+log(await readfile('b/../b/b/../b/test'))
+// log(BigInt(123))
+// log(...new Array(50).fill('hello sandbox'))
+// log(new Array(50).fill('hello sandbox'))
+// log(Error('error'))
+// console.error(Error('test error'))
+// const wait = t => new Promise(r => setTimeout(r, t))
+// await wait(500)
+// throw Error('real error')
+`, true)
   ve.togglernode(a)
   ve.togglernode(b)
   ve.togglernode(c)
   ve.togglernode(d)
-  const sb = opensb({ o: e })
   opente({ o: e })
+  const sb = opensb({ o: e })
   setTimeout(sb.togglecli, 100)
 }
