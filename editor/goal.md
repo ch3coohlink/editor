@@ -45,6 +45,7 @@
 - [x] serialization
 - [x] save file to disk
 - [x] save and load from local repo
+- [x] delete unused hash object
 - [x] use max distance instead of last distance in node click
 - [ ] global modified state to prevent unsaved data lost
 - [ ] auto save

@@ -1660,7 +1660,7 @@ $.opente = ({ o }) => {
   ve.on('version lock change', sro)
   te.on('change', () => { cgd = true, tb.textContent = caln() })
   te.on('save', () => (ve.savefile(o, te.value),
-    cgd = false, tb.textContent = caln()))
+    save(), cgd = false, tb.textContent = caln()))
   let cgd = false, askclose = () => {
     const w = dom('span'); tb.append(w)
     w.innerText = 'file not saved, really close?'
@@ -1714,10 +1714,10 @@ const localsave = async dir => {
   })); ve.clear(); ve.deserialization(data)
 }, devsave = async r => {
   const d = ve.serialization(), ws = await connectdevserver()
-  const a = await ws.loadlist(r), ho = new Set(a)
+  const a = await ws.loadlist(r), ho = new Set(a), ha = []
   const hs = d.hashobj; delete d.hashobj; await Promise.all(hs
-    .map(h => ho.has(h.id) ? 0 : (a.push(h.id), ws.write(h.id, h, r)))
-    .concat(ws.write('graph.json', d, r), ws.write('hashlist.json', a, r)))
+    .map(h => (ha.push(h.id), ho.has(h.id) ? 0 : ws.write(h.id, h, r)))
+    .concat(ws.write('graph.json', d, r), ws.write('hashlist.json', ha, r)))
 }, httpload = async repo => {
   const rs = `repo/${repo}/`, fs = 'graph.json hashlist.json'.split(' ')
   const read = async p => (await fetch(rs + p)).text()
