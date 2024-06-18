@@ -44,7 +44,7 @@
 - [x] record open state in git graph
 - [x] serialization
 - [x] save file to disk
-- [ ] save and load from local repo
+- [x] save and load from local repo
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
         which means you don't need to save them
@@ -73,3 +73,6 @@
   - [ ] eval
   - [ ] cli scroll bar
   - [ ] automatic cli scroll when scrolled to end
+- design fault
+  - should use path to save file node
+  - display edge name seems useless

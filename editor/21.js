@@ -524,10 +524,11 @@
     build(tree(sc), sc)
   })
 } { // vcs --------------------------------------------------------------------
-  $.graph = ($ = eventnode({ g: {}, i: 0 })) => {
+  $.graph = ($ = eventnode({ g: {} })) => {
     with ($) {
       const nsym = Symbol('name')
-      $.addnode = (id = i++) => {
+      $.visualonly = false; let i = 0
+      $.addnode = (id = visualonly ? i++ : uuid()) => {
         const o = { id, to: {}, from: {}, nto: 0, nfrom: 0, children: {} }
         Reflect.defineProperty(o, 'name', {
           get: () => o[nsym], set: v => (o[nsym] = v, emit('namenode', { o }))
@@ -994,8 +995,8 @@
         elm.append(dvctn)
         elm.style.position = 'relative'
       } let insd = false, r, j; { // selection dialog
-        $.selectdialog = (...a) => (insd = true,
-          [r, j] = a.map(f => (...a) => (insd = false, f(...a))))
+        $.selectdialog = (p, ...a) => (insd = true,
+          [r, j] = a, p.finally(() => insd = false))
       }
     } return $
   }
@@ -1011,6 +1012,7 @@
   $.vcseditor = ($ = vcs()) => {
     with ($) {
       $.vg = graphlayout(), $.nodemap = bimap()
+      vg.visualonly = true
       on('addnode', ({ o }) => {
         if (o.type === 'version' || o.type === 'mergever') {
           let vo = vg.addnode(); vo.name = o.id.slice(0, 8)
@@ -1022,7 +1024,7 @@
         }
       })
       on('delnode', ({ o }, vo = tovnode(o)) => {
-        if (vo) { vg.delnode(vo.id) }
+        if (vo) { vg.delnode(vo.id); nodemap.del(o.id) }
         if (o.type === 'file') { emit('file change', { o }) }
       })
       on('addedge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
@@ -1187,6 +1189,13 @@
       $.elm = dom(); elm.append(vg.elm)
       elm.style.position = 'relative'
       elm.style.height = '100%'
+      elm.tabIndex = 1
+      elm.addEventListener('keydown', e => {
+        e.preventDefault()
+        if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
+          emit('save whole repo')
+        }
+      })
       const userend = new Error('User ended input.')
       { // dialog thing
         const dialogdv = dom()
@@ -1242,7 +1251,7 @@
           let r, j, p = new Promise((...a) => [r, j] = a)
             .finally(() => (elm.style.background = '',
               dialogdv.style.background = bk))
-          vg.selectdialog(r, j)
+          vg.selectdialog(p, r, j)
           const d = dom(), t = dom('span'), b = btn('✕')
           d.style.pointerEvents = 'initial'
           d.style.background = '#00000044'
@@ -1284,6 +1293,22 @@
           d.append(t, yb, nb); dialogdv.append(d); return p
         })
         $.chooserepodialog = dialogprocess(async () => {
+          let r, j, p = new Promise((...a) => [r, j] = a)
+          const d = dom(), t = dom('span'), b = btn('✕')
+          d.style.pointerEvents = 'initial'
+          d.style.background = '#00000044'
+          d.style.borderRadius = '10px'
+          d.style.borderTopLeftRadius = ''
+          d.style.borderTopRightRadius = ''
+          d.style.placeSelf = 'flex-start'
+          d.style.padding = '10px 20px'
+          t.textContent = 'pick a node'
+          t.style.paddingRight = '10px'
+          b.onclick = () => j(userend)
+          d.append(t, b); dialogdv.append(d); return p
+          // TODO
+        })
+        $.savetolocaldialog = dialogprocess(async () => {
           let r, j, p = new Promise((...a) => [r, j] = a)
           const d = dom(), t = dom('span'), b = btn('✕')
           d.style.pointerEvents = 'initial'
@@ -1711,8 +1736,8 @@ const localsave = async dir => {
     if (await canconnectdevserver) { await devsave(repo) } else {
       // boot save to local dialog
       $.repo = await ve.savetolocaldialog()
-      const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
-      await localsave(await opfs.readdir(repo, topdir))
+      // const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
+      // await localsave(await opfs.readdir(repo, topdir))
     }
   }
 }, load = async () => {
@@ -1756,7 +1781,6 @@ const connectdevserver = () => {
     send('writerepo', { repo, name, text: JSON.stringify(text) })
   return new Promise(a => r = a)
 }
-
 
 { // main
   $.ve = vcseditor()
