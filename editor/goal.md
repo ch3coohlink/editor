@@ -45,6 +45,9 @@
 - [x] serialization
 - [x] save file to disk
 - [x] save and load from local repo
+- [x] use max distance instead of last distance in node click
+- [ ] global modified state to prevent unsaved data lost
+- [ ] auto save
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
         which means you don't need to save them
@@ -75,4 +78,4 @@
   - [ ] automatic cli scroll when scrolled to end
 - design fault
   - should use path to save file node
-  - display edge name seems useless
+  - display name on edge seems useless

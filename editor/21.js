@@ -745,11 +745,12 @@
           if (e.target !== c || e.button !== 0) { return }
           if (insd) { return r(n) } closectxmenu()
           let sp = geteventlocation(e) // start position
-          let moveed = false, m = e => {
+          let moveed = false; m = e => {
             if (e.touches && e.touches.length > 1) { return } reset()
             const cp = geteventlocation(e)
             const { x, y } = screen2svgcoord()(...cp)
             n.data.pos.x = x, n.data.pos.y = y, n.data.lock = true
+            if (moveed) { return }
             moveed = (cp[0] - sp[0]) ** 2 + (cp[1] - sp[1]) ** 2 > 100
           }; listenpointermove(m), listenpointerup(e => (
             moveed ? 0 : emit('nodeclick', { o: n, e }),
@@ -1191,8 +1192,8 @@
       elm.style.height = '100%'
       elm.tabIndex = 1
       elm.addEventListener('keydown', e => {
-        e.preventDefault()
         if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
+          e.preventDefault()
           emit('save whole repo')
         }
       })
@@ -1339,17 +1340,15 @@
               const oe = oto[id], e = { ...oe }
               e.o = oe.o.id; to.push(e)
             } o.to = to, delete o.from, delete o.children
-            delete o.nto, delete o.type
-            if (oo.type === 'hashobj') {
-              if (oo.nfrom > 0) { data[oo.type].push(o) }
-            } else { delete o.nfrom; data[oo.type].push(o) }
+            delete o.nto, delete o.type, delete o.nfrom
+            if (oo.type !== 'hashobj' || oo.nfrom > 0) { data[oo.type].push(o) }
           } return data
         }
         $.deserialization = d => {
           if (typeof d === 'string') { d = JSON.parse(d) } setdelay(); const es = []
           for (const type in d) for (let o of d[type]) {
             o = { ...o }; const no = addnode(o.id), to = o.to
-            delete o.id, delete o.to, delete o.nfrom
+            delete o.id, delete o.to
             Object.assign(no, o); no.type = type
             for (const e of to) { es.push([no.id, e]) }
           } for (let [id, e] of es) {
@@ -1477,8 +1476,8 @@
 
       let vcsenventregisted = false, filechange
       const _fchd = ({ o }) => filechange?.(o)
-      const registerVCSevent = () => vcs.on('file change', _fchd)
-      const unregisterVCSevent = () => vcs.off('file change', _fchd)
+      $.registerVCSevent = () => vcs.on('file change', _fchd)
+      $.unregisterVCSevent = () => vcs.off('file change', _fchd)
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
@@ -1494,7 +1493,7 @@
         AudioContext: v => v.close(),
         Worker: v => v.terminate(),
       }, callbacks = {}, packedinstances = {}
-      const gen_timeout = ($ = {}) => {
+      const gen_timeout = (o = {}) => {
         for (const [s, c] of timeout_functions) {
           const sf = window[s], cf = window[c]
           let cbs = new Set; callbacks[c] = cbs; cbs.cf = cf
@@ -1510,11 +1509,11 @@
           for (const v of cbs) { cf(v) } cbs.clear()
         }
       }
-      const pack_constructor = ($ = {}) => {
+      const pack_constructor = (o = {}) => {
         for (const k in deconstructors) {
-          const f = window[k], a = packedinstances[k] = []; $[k] = function (...v
-          ) { const o = new f(...v), r = new WeakRef(o); a.push(r); return r }
-        } return $
+          const f = window[k], a = packedinstances[k] = []; o[k] = function (...v
+          ) { const r = new WeakRef(new f(...v)); a.push(r); return r }
+        } return o
       }, constructorpacker = pack_constructor()
       pack_constructor.clear = () => {
         for (const k in packedinstances) {
@@ -1685,7 +1684,7 @@ $.opensb = ({ o }) => {
   const sb = sandboxtab(ve, o), v = ve.getversion(o)
   const n = v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name
-  if (!dk3.parentNode) { createdk('top', v => dk3 = v) }
+  if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
   const tab = dom(), tbt = dom('span')
   tbt.textContent = n
   tbt.style.fontSize = '10px'

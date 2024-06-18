@@ -65,6 +65,13 @@ wss.on('connection', ws => {
       } const rs = `./repo/${o.repo}/`; try {
         await fs.promises.writeFile(rs + o.name, o.text)
         ws.send(JSON.stringify({ id: o.id }))
+        if (o.name === 'hashlist.json') {
+          let a = new Set(JSON.parse(o.text)), b =
+            new Set(await fs.promises.readdir(rs))
+          b.delete('hashlist.json'), b.delete('graph.json')
+          for (const n of a) { b.delete(n) } b = [...b]
+          await Promise.all(b.map(n => fs.promises.unlink(rs + n)))
+        }
       } catch (e) { ws.send(JSON.stringify({ id: o.id, error: e.message })) }
     }
   })
