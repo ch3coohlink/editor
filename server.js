@@ -51,6 +51,21 @@ wss.on('connection', ws => {
       } catch (e) {
         ws.send(JSON.stringify({ command: o.command + 'fail', error: e.message, path: o.path }))
       }
+    } else if (o.command === 'listrepo') {
+      if (!o.repo || typeof o.repo !== 'string') {
+        ws.send(JSON.stringify({ id: o.id, error: 'Invalid input' }))
+      } const rs = `./repo/${o.repo}/`; try {
+        await fs.promises.mkdir(rs, { recursive: true })
+        const f = await fs.promises.readFile(rs + hashlist.json)
+        ws.send(JSON.stringify({ id: o.id, list: f.toString() }))
+      } catch (e) { ws.send(JSON.stringify({ id: o.id, error: e.message })) }
+    } else if (o.command === 'writerepo') {
+      if (!o.repo || typeof o.repo !== 'string') {
+        ws.send(JSON.stringify({ id: o.id, error: 'Invalid input' }))
+      } const rs = `./repo/${o.repo}/`; try {
+        await fs.promises.writeFile(rs + o.name, o.text)
+        ws.send(JSON.stringify({ id: o.id }))
+      } catch (e) { ws.send(JSON.stringify({ id: o.id, error: e.message })) }
     }
   })
   ws.on('close', () => {

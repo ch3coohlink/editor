@@ -1074,6 +1074,7 @@
       }])
       $.openfile = (o, vo = tovnode(o)) =>
         emit('boot text editor', { o })
+      $.saverepo = () => emit('save whole repo')
       $.savefile = (o, t, h = hexenc(sha256(t))) => {
         checkversion(o); setdelay(); deledge(o.id, o.value)
         if (!g[h]) { addhashobj(h, t) } addedge(o.id, h)
@@ -1150,6 +1151,7 @@
       vg.on('panelctxmenu', e => vg.openctxmenu(e, packnotify([
         ['✨ new version', e => setnodepos(e, newver())],
         ['🔄️ reset camera', () => vg.resetcamera()],
+        ['💾 save', saverepo],
       ])))
       $.togglernode = n => togglenode(tovnode(n))
       $.togglenode = vo => {
@@ -1281,6 +1283,22 @@
           yb.style.width = nb.style.width = '40px'
           d.append(t, yb, nb); dialogdv.append(d); return p
         })
+        $.chooserepodialog = dialogprocess(async () => {
+          let r, j, p = new Promise((...a) => [r, j] = a)
+          const d = dom(), t = dom('span'), b = btn('✕')
+          d.style.pointerEvents = 'initial'
+          d.style.background = '#00000044'
+          d.style.borderRadius = '10px'
+          d.style.borderTopLeftRadius = ''
+          d.style.borderTopRightRadius = ''
+          d.style.placeSelf = 'flex-start'
+          d.style.padding = '10px 20px'
+          t.textContent = 'pick a node'
+          t.style.paddingRight = '10px'
+          b.onclick = () => j(userend)
+          d.append(t, b); dialogdv.append(d); return p
+          // TODO
+        })
         elm.append(dialogdv)
       } {// TODO: notication
         $.makenotify = m => { }
@@ -1296,15 +1314,17 @@
               const oe = oto[id], e = { ...oe }
               e.o = oe.o.id; to.push(e)
             } o.to = to, delete o.from, delete o.children
-            delete o.nto, delete o.nfrom, delete o.type
-            data[oo.type].push(o)
+            delete o.nto, delete o.type
+            if (oo.type === 'hashobj') {
+              if (oo.nfrom > 0) { data[oo.type].push(o) }
+            } else { delete o.nfrom; data[oo.type].push(o) }
           } return data
         }
         $.deserialization = d => {
           if (typeof d === 'string') { d = JSON.parse(d) } setdelay(); const es = []
           for (const type in d) for (let o of d[type]) {
             o = { ...o }; const no = addnode(o.id), to = o.to
-            delete o.id, delete o.to
+            delete o.id, delete o.to, delete o.nfrom
             Object.assign(no, o); no.type = type
             for (const e of to) { es.push([no.id, e]) }
           } for (let [id, e] of es) {
@@ -1606,30 +1626,8 @@
         await list(dir)).map(n => dir.removeEntry(n, rmopt))), _)
     } return $
   }; $.opfs = opfs()
-
-  let ws
-  $.connecttodevserver = () => {
-    if (ws) { return }
-    ws = new WebSocket((window.location.protocol === 'https:'
-      ? 'wss:' : 'ws:') + '//' + window.location.host)
-    const send = o => ws.send(JSON.stringify(o))
-    ws.onopen = () => ws.send(JSON.stringify({ command: 'init', path: initpath }))
-    ws.onmessage = e => {
-      const o = JSON.parse(e.data)
-      if (o.command === 'init' && !inited) {
-        inited = true, exec(initpath, o.content)
-      } else if (o.command === 'initfail') { console.error(o.error) }
-    }
-  }
 }
 
-$.ve = vcseditor()
-listenframe(() => ve.frame())
-
-$.sc = splitctn()
-$.dk = docking()
-sc.additem(dk)
-document.body.append(sc)
 $.opente = ({ o }) => {
   const te = texteditor(), v = ve.getversion(o)
   te.value = ve.g[o.value].value
@@ -1677,12 +1675,102 @@ $.opensb = ({ o }) => {
   return sb
 }
 
-{
+const localsave = async dir => {
+  const data = ve.serialization()
+  const ho = new Set(await opfs.list(dir))
+  const hs = data.hashobj; delete data.hashobj
+  await Promise.all(hs.map(h => ho.has(h.id) ? 0 : opfs.write(h.id, h, dir)))
+  await opfs.write('graph.json', data, dir)
+}, localload = async dir => {
+  const a = await opfs.list(dir)
+  const data = JSON.parse(await opfs.read('graph.json', dir))
+  data.hashobj = []; await Promise.all(a.map(async n => {
+    if (n === 'graph.json') { return }
+    data.hashobj.push(JSON.parse(await opfs.read(n, dir)))
+  })); ve.clear(); ve.deserialization(data)
+}, devsave = async r => {
+  const d = ve.serialization(), ws = await connectdevserver()
+  const a = await ws.loadlist(r), ho = new Set(a)
+  const hs = d.hashobj; delete d.hashobj; await Promise.all(hs
+    .map(h => ho.has(h.id) ? 0 : (a.push(h.id), ws.write(h.id, h, r)))
+    .concat(ws.write('graph.json', d, r), ws.write('hashlist.json', a, r)))
+}, httpload = async repo => {
+  const rs = `repo/${repo}/`, fs = 'graph.json hashlist.json'.split(' ')
+  const read = async p => (await fetch(rs + p)).text()
+  let [data, list] = await Promise.all(fs.map(read))
+  data = JSON.parse(data); list = list ? JSON.parse(list) : []
+  list = await Promise.all(list.map(read))
+  const a = data.hashobj = []; list.forEach(h => a.push(JSON.parse(h)))
+  ve.clear(); ve.deserialization(data)
+}, save = async () => {
+  if (typeof repo !== 'string') { throw Error(`Can't save due to internal error.`) }
+  if (userland) {
+    const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
+    await localsave(await opfs.readdir(repo, topdir))
+  } else {
+    if (await canconnectdevserver) { await devsave(repo) } else {
+      // boot save to local dialog
+      $.repo = await ve.savetolocaldialog()
+      const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
+      await localsave(await opfs.readdir(repo, topdir))
+    }
+  }
+}, load = async () => {
+  const sp = new URLSearchParams(location.search)
+  userland = sp.get('user') ?? sp.get('userland')
+  $.repo = sp.get('repo'); if (userland) {
+    const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
+    if (typeof repo !== 'string') {
+      const repos = await opfs.list(topdir)
+      if (repos.length > 1) { await ve.chooserepodialog(repos) }
+      else if (repos.length === 1) { repo = repo[0] } else { repo = uuid() }
+    } await localload(await opfs.writedir(repo, topdir))
+  } else {
+    if (typeof repo !== 'string') { repo = 'b88b5d2ba107fa4f' }
+    await httpload(repo)
+  }
+}; let userland
+const canconnectdevserver = ((ws =
+  new WebSocket((window.location.protocol === 'https:'
+    ? 'wss:' : 'ws:') + '//' + window.location.host)) =>
+  new Promise(r => (setTimeout(() => r(false), 1000),
+    ws.onopen = () => r(true))).finally(() => ws.close()))()
+const connectdevserver = () => {
+  const ws = new WebSocket((window.location.protocol === 'https:'
+    ? 'wss:' : 'ws:') + '//' + window.location.host)
+  let i = 0, response = new Map, send = (c, o, j = i++) => (
+    o.command = c, o.id = j, ws.send(JSON.stringify(o)),
+    new Promise((...a) => (setTimeout(() => a[1](Error('time out')), 5000),
+      response.set(j, a))).finally(() => response.delete(j)))
+  let r; ws.onopen = () => r(ws); ws.onmessage = e => {
+    const o = JSON.parse(e.data)
+    if (!o || typeof o !== 'object') { return }
+    const id = o.id, [r, j] = response.get(id); delete o.id
+    o.error ? j(Error(o.error)) : r(o)
+  }
+  ws.loadlist = async repo => {
+    try { return JSON.parse((await send('listrepo', { repo })).list) }
+    catch (e) { return [] }
+  }
+  ws.write = (name, text, repo) =>
+    send('writerepo', { repo, name, text: JSON.stringify(text) })
+  return new Promise(a => r = a)
+}
+
+
+{ // main
+  $.ve = vcseditor()
+  listenframe(() => ve.frame())
+  $.sc = splitctn()
+  $.dk = docking()
+  sc.additem(dk)
+  document.body.append(sc)
   dk.adddock(ve.elm, 'vcs')
   $.dk2 = false, $.dk3 = false
   ve.on('boot text editor', opente)
   ve.on('boot conflict editor', opence)
   ve.on('boot sandbox', opensb)
+  ve.on('save whole repo', save)
   $.createdk = (d = 'left', wt) => {
     const t = dk.adddock('', 'temp')
     t.setclosable(() => true)
@@ -1690,53 +1778,5 @@ $.opensb = ({ o }) => {
     setTimeout(() => dk2.deldock(t))
     wt(dk2)
   }
+  await load()
 }
-
-{
-  const a = ve.newver().id
-  ve.writefile(a, 'a.js', 'aaa\nbbb\nccc')
-  const b = ve.newver(a).id
-  ve.writefile(b, 'a.js', 'aaa\nddd\nccc', true)
-  ve.writefile(b, 'b.js', 'aaa\nddd\nccc', true)
-  const dira = ve.writedir(b, 'b').id
-  ve.writefile(dira, 'test', `test`, true)
-  const c = ve.newver(a).id
-  ve.writefile(c, 'a.js', `aaa\nggg\nccc`, true)
-  ve.writelink(c, 'b', b)
-  ve.merge(b, c)
-  const d = ve.newver(c).id
-  ve.writelink(d, 'c', 'fdsafdfadfafarfsdfas')
-  ve.togglernode(a)
-  ve.togglernode(b)
-  ve.togglernode(c)
-  ve.togglernode(d)
-  ve.togglernode(dira)
-}
-
-const save = async dir => {
-  const data = ve.serialization()
-  const a = await opfs.list(dir)
-  const ho = new Set; a.forEach(n => ho.add(n))
-  const hs = data.hashobj; delete data.hashobj
-  await Promise.all(hs.map(h => ho.has(h.id) ? 0 : opfs.write(h.id, h, dir)))
-  await opfs.write('graph.json', data, dir)
-}
-const load = async dir => {
-  const a = await opfs.list(dir)
-  const data = JSON.parse(await opfs.read('graph.json', dir))
-  data.hashobj = []; await Promise.all(a.map(async n => {
-    if (n === 'graph.json') { return }
-    data.hashobj.push(JSON.parse(await opfs.read(n, dir)))
-  })); ve.clear(); ve.deserialization(data)
-}
-
-setTimeout(async () => {
-  log(await opfs.list())
-  const dn = 'test_B92fgXdk2k49j2OP3'
-  const dir = await opfs.writedir(dn)
-  await save(dir)
-  await load(dir)
-  log(await opfs.list(dir))
-  await opfs.delete(dn)
-  log(await opfs.list())
-}, 0)
