@@ -1,4 +1,4 @@
-// 20 - save to disk
+// 21 - save/load from local repo
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined

@@ -43,7 +43,8 @@
 - [x] folder open/close identifier
 - [x] record open state in git graph
 - [x] serialization
-- [ ] save file to disk
+- [x] save file to disk
+- [ ] save and load from local repo
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
         which means you don't need to save them
