@@ -736,6 +736,7 @@
         t.setAttribute('stroke', forecolor)
         t.setAttribute('stroke-width', circlesize * 0.03 + 'px')
         t.setAttribute('font-size', circlesize + 'px')
+        t.style.pointerEvents = 'none'
         t.style.filter = 'drop-shadow(#00000033 0px 2px 2px)'
         c.style.filter = 'drop-shadow(#00000077 0px 2px 4px)'
         c.addEventListener('contextmenu', e => (
@@ -1541,22 +1542,24 @@
         const shadowroot = domctn.attachShadow({ mode: 'open' })
         const root = dom(); shadowroot.append(root)
         const env = { root, ...timeoutfunctions, ...constructorpacker }
+        env.$$ = window.$
 
         let logd, nolog = false, _error = (nodup, ...a) => (
           nodup ? nolog = true : 0, _log(...a), nolog = false,
           logd.style.textShadow = 'red 0px 0px 4px')
-        const format = v => {
+        const format = (v, d = 1) => {
           switch (typeof v) {
             case 'string': v = `"${v}"`; break
             case 'function': v = '⨍ ' + v; break
             case 'symbol': v = `Symbol("${v.description}")`; break
             case 'bigint': v = v + 'n'; break; case 'object':
               if (v instanceof Error) { v = v.stack } else if (v instanceof Array) {
-                v = `(${v.length}) [${v.map(v => typeof v === 'object' ? v : format(v)).join(', ')}]`
+                const l = v.length; v = `(${l}) [${d > 0 ? v.map(
+                  v => format(v, d - 1)).join(', ') : l > 0 ? '...' : ' '}]`
               } else if (v && !(v instanceof Date)) {
+                if (d <= 0) { v = '' + v; break }
                 const a = [v.toString().slice(8, -1) + ' {']; for (const k in v) {
-                  let vv = v[k]; a.push('  ' + k + ': ' + (
-                    typeof vv === 'object' ? vv : format(vv)))
+                  let vv = v[k]; a.push('  ' + k + ': ' + format(vv, d - 1))
                 } a.push('}'); v = a.join(a.length > 2 ? '\n' : ' ')
               } else { v = '' + v } break; default: v = '' + v; break
           } return v
@@ -1568,7 +1571,7 @@
             } d.append(s = dom('span')), s.textContent = format(a[l])
             clictn.append(d); logd = d
           } catch (e) { _error(false, 'console.log failed to print log'); console.error(e) }
-        }, _clear = () => { clictn.innerHTML = '' }
+        }, _clear = () => { clictn.innerHTML = ''; console.clear() }
         env.originconsole = console, env.console = {
           log: _log, clear: _clear,
           error: (...a) => _error(false, ...a)
@@ -1653,13 +1656,13 @@
 }
 
 $.opente = ({ o }) => {
-  const te = texteditor(), v = ve.getversion(o)
-  te.value = ve.g[o.value].value
+  const te = texteditor(), v = vcs.getversion(o)
+  te.value = vcs.g[o.value].value
   if (v.lock) { te.setreadonly() }
   const sro = ({ o }) => (te.setreadonly(o.lock), tb.textContent = caln())
-  ve.on('version lock change', sro)
+  vcs.on('version lock change', sro)
   te.on('change', () => { cgd = true, tb.textContent = caln() })
-  te.on('save', () => (ve.savefile(o, te.value),
+  te.on('save', () => (vcs.savefile(o, te.value),
     save(), cgd = false, tb.textContent = caln()))
   let cgd = false, askclose = () => {
     const w = dom('span'); tb.append(w)
@@ -1672,8 +1675,8 @@ $.opente = ({ o }) => {
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
   tb.setclosable((b = cgd) => (
-    b ? askclose() : ve.off('version lock change', sro), !b))
-  const f = () => ve.vg.highlight(ve.tovnode(o))
+    b ? askclose() : vcs.off('version lock change', sro), !b))
+  const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f()
   return te
 }
@@ -1681,7 +1684,7 @@ $.opence = ({ o }) => {
   log(o)
 }
 $.opensb = ({ o }) => {
-  const sb = sandboxtab(ve, o), v = ve.getversion(o)
+  const sb = sandboxtab(vcs, o), v = vcs.getversion(o)
   const n = v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name
   if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
@@ -1694,13 +1697,13 @@ $.opensb = ({ o }) => {
   tab.append(tbt, sb.configtab)
   const tb = dk3.adddock(sb, tab)
   tb.setclosable(() => { sb.unregisterVCSevent(); return true })
-  const f = () => ve.vg.highlight(ve.tovnode(o))
+  const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
   return sb
 }
 
 const localsave = async dir => {
-  const data = ve.serialization()
+  const data = vcs.serialization()
   const ho = new Set(await opfs.list(dir))
   const hs = data.hashobj; delete data.hashobj
   await Promise.all(hs.map(h => ho.has(h.id) ? 0 : opfs.write(h.id, h, dir)))
@@ -1711,9 +1714,9 @@ const localsave = async dir => {
   data.hashobj = []; await Promise.all(a.map(async n => {
     if (n === 'graph.json') { return }
     data.hashobj.push(JSON.parse(await opfs.read(n, dir)))
-  })); ve.clear(); ve.deserialization(data)
+  })); vcs.clear(); vcs.deserialization(data)
 }, devsave = async r => {
-  const d = ve.serialization(), ws = await connectdevserver()
+  const d = vcs.serialization(), ws = await connectdevserver()
   const a = await ws.loadlist(r), ho = new Set(a), ha = []
   const hs = d.hashobj; delete d.hashobj; await Promise.all(hs
     .map(h => (ha.push(h.id), ho.has(h.id) ? 0 : ws.write(h.id, h, r)))
@@ -1725,7 +1728,7 @@ const localsave = async dir => {
   data = JSON.parse(data); list = list ? JSON.parse(list) : []
   list = await Promise.all(list.map(read))
   const a = data.hashobj = []; list.forEach(h => a.push(JSON.parse(h)))
-  ve.clear(); ve.deserialization(data)
+  vcs.clear(); vcs.deserialization(data)
 }, save = async () => {
   if (typeof repo !== 'string') { throw Error(`Can't save due to internal error.`) }
   if (userland) {
@@ -1734,7 +1737,7 @@ const localsave = async dir => {
   } else {
     if (await canconnectdevserver) { await devsave(repo) } else {
       // boot save to local dialog
-      $.repo = await ve.savetolocaldialog()
+      $.repo = await vcs.savetolocaldialog()
       // const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
       // await localsave(await opfs.readdir(repo, topdir))
     }
@@ -1746,7 +1749,7 @@ const localsave = async dir => {
     const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
     if (typeof repo !== 'string') {
       const repos = await opfs.list(topdir)
-      if (repos.length > 1) { await ve.chooserepodialog(repos) }
+      if (repos.length > 1) { await vcs.chooserepodialog(repos) }
       else if (repos.length === 1) { repo = repo[0] } else { repo = uuid() }
     } await localload(await opfs.writedir(repo, topdir))
   } else {
@@ -1782,18 +1785,19 @@ const connectdevserver = () => {
 }
 
 { // main
-  $.ve = vcseditor()
-  listenframe(() => ve.frame())
+  window.$ = $
+  $.vcs = vcseditor()
+  listenframe(() => vcs.frame())
   $.sc = splitctn()
   $.dk = docking()
   sc.additem(dk)
   document.body.append(sc)
-  dk.adddock(ve.elm, 'vcs')
+  dk.adddock(vcs.elm, 'vcs')
   $.dk2 = false, $.dk3 = false
-  ve.on('boot text editor', opente)
-  ve.on('boot conflict editor', opence)
-  ve.on('boot sandbox', opensb)
-  ve.on('save whole repo', save)
+  vcs.on('boot text editor', opente)
+  vcs.on('boot conflict editor', opence)
+  vcs.on('boot sandbox', opensb)
+  vcs.on('save whole repo', save)
   $.createdk = (d = 'left', wt) => {
     const t = dk.adddock('', 'temp')
     t.setclosable(() => true)
@@ -1802,4 +1806,5 @@ const connectdevserver = () => {
     wt(dk2)
   }
   await load()
+  log(vcs.g)
 }
