@@ -601,7 +601,7 @@
             used.add(o); p = o; o = g[o.children[name]]
             if (!o) { throw Error(`Invalid path: "${path}"`) }
           }
-        } return { o, used }
+        } return { o, used, ver: getversion(o) }
       }; $.read = locatebypath
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
@@ -1432,19 +1432,19 @@
   }
   $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
     $.vcs = vcs; $.target = target; with ($) {
-      { // tab bar and basic style
+      { // tab bar and basic stylegt
         $.configtab = eventnode(dom())
         configtab.style.margin = '0px 5px'
         configtab.style.display = 'flex'
         configtab.style.cursor = 'initial'
-        const bs = '▶️ 🧾 ⚙️'.split(' ').map(b => {
+        const bs = '▶️ ⏹️ 🧾'.split(' ').map(b => {
           b = btn(b, 'none'), b.style.padding = '0'
           b.style.height = b.style.width = '20px'
           b.style.fontSize = '10px'; return b
         }); configtab.append(...bs)
         bs[0].onclick = () => exec()
-        bs[1].onclick = () => togglecli()
-        bs[2].onclick = () => log('need implement')
+        bs[1].onclick = () => clear()
+        bs[2].onclick = () => togglecli()
         configtab.addEventListener('pointerdown', e => e.preventDefault())
         $.style.height = '100%'
         $.style.position = 'relative'
@@ -1545,7 +1545,6 @@
         clear()
 
         if (!path) { path = vcs.getpath(target) }
-        const ver = path.version
 
         const domctn = dom(); domdiv.append(domctn)
         const shadowroot = domctn.attachShadow({ mode: 'open' })
@@ -1592,26 +1591,34 @@
         filechange = o => watch.has(o) ? reload() : 0
 
         const load = p => {
-          const { o, used } = vcs.read(path.version.id, p); watch.add(o)
-            ;[...used].forEach(v => watch.add(v))
-          if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
-          return vcs.g[o.value].value
+          let readver = rootver; if (isv) {
+            const a = p.split('/'), n = parseFloat(a[0])
+            if (!Number.isNaN(n) && n >= 0) { readver = links[n], p = (a.shift(), a.join('/')) }
+          } if (isv && p === filepath && readver === rootver
+          ) { return { text: content, ver: rootver } } else {
+            const { o, used, ver } = vcs.read(readver, p); watch.add(o)
+              ;[...used].forEach(v => watch.add(v))
+            if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
+            return { text: vcs.g[o.value].value, ver }
+          }
         }
         env.__readfile = b => p => load(solvepath(b, p))
-        env.__require = b => async (ph, p = solvepath(b, ph)) =>
-          loaded.has(p) ? undefined : await exec(p, await load(p))
-        let loaded = new Set, AF = (async () => { }).constructor
-        const solvepath = (base, path) => {
-          let b = base.split('/'); path = path.split('/'); for (const p of path) {
-            if (p === '..') { b.pop() } else if (p !== '.') { b.push(p) }
-          } path = b.filter(v => v).join('/'); return path
-        }, exec = async (path, src, v = ver) => (loaded.add(path), await (
+        env.__require = b => async (ph, p = solvepath(b, ph)) => {
+          if (loaded.has(p)) { return } const data = await load(p)
+          await exec(p, data.text, data.ver)
+        }; const loaded = new Set, AF = (async () => { }).constructor
+        const solvepath = (base, path) => base + (path.startsWith('/') ? '' : '/') + path
+        const exec = async (path, src, v) => (loaded.add(path), await (
           new AF('$', `//# sourceURL=${v.id.slice(0, 8) + '/' + path}\n` +
             `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
             `const readfile = $.__readfile(__dirname)\n` +
             `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)))
 
-        try { await exec(path.path.join('/'), vcs.g[target.value].value) }
+        const isv = target.type === 'virtual'
+        const [filepath, content, rootver, links] = isv ? target.getfile()
+          : [path.path.join('/'), vcs.g[target.value].value, path.version.id]
+        if (links) { env.__links = links }
+        try { await exec(filepath, content, rootver) }
         catch (e) { _error(true, e); console.error(e) }
       }
     } return $
