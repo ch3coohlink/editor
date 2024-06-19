@@ -5,6 +5,9 @@
   $.wait = t => new Promise(r => setTimeout(r, t))
   $.debounce = (f, t = 100, i) => (...a) =>
     (clearTimeout(i), i = setTimeout(() => f(...a), t))
+  $.debounceasync = (f, t = 100, i) => (...a) =>
+    new Promise((r, j) => (clearTimeout(i), i = setTimeout(
+      async () => { try { r(await f(...a)) } catch (e) { j(e) } }, t)))
   $.throttle = (f, t = 100, i) => (...a) =>
     i ? 0 : (i = 1, f(...a), setTimeout(() => i = 0, t))
   $.hexenc = b => [...b].map(v => v.toString(16).padStart(2, '0')).join("")
@@ -24,15 +27,22 @@
     for (const e of n) { f.appendChild(e) }
     p.insertBefore(f, d[s]); return rm
   }
-  $.eventnode = ($ = {}) => {
+  const es = Symbol('eventid'); $.eventnode = ($ = {}) => {
     $._handles = {}; with ($) {
-      $.emit = (t, ...a) => {
-        if (delay) { da.push(() => _handles[t]?.forEach(f => f(...a))) }
-        else { _handles[t]?.forEach(f => f(...a)) }
-      }; $.on = (t, f) => (_handles[t] ??= new Set).add(f)
-      let delay = false, da = []; $.setdelay = () => { delay = true }
-      $.enddelay = () => { for (const f of da) { f() } da = []; delay = false }
-      $.off = (t, f) => (_handles[t]?.delete(f),
+      let i = 0, giveid = (f, id = i++) => typeof f[es] === 'number' ? f[es] : f[es] = id
+      $.emit = (t, ...arg) => {
+        const ht = _handles[t]
+        if (d) { da.push((arg.unshift(t), arg)) } else if (ht) {
+          const a = [], b = []; for (let [id, f] of ht) {
+            f = f.deref ? f.deref() : f; f ? a.push(f) : b.push(id)
+          } for (const i of b) { ht.delete(i) }
+          for (const f of a) { f(...arg) }
+        }
+      }; $.on = (t, f) => (_handles[t] ??= new Map).set(giveid(f), f)
+      $.onweak = (t, f) => (_handles[t] ??= new Map).set(giveid(f), new WeakRef(f))
+      let d = false, da = []; $.setdelay = () => { d = true }
+      $.enddelay = () => { d = false; for (const a of da) { emit(...a) } da = [] }
+      $.off = (t, f) => (_handles[t]?.delete(f[es]),
         _handles[t].size > 0 ? 0 : delete _handles[t])
     } return $
   }
@@ -821,7 +831,7 @@
           if (ad.lock) { ad.vec.x = ad.vec.y = 0; continue }
           ap.x += vx * dt, ap.y += vy * dt
           ad.oldacc = { ...ad.acc }, ad.acc.x = ad.acc.y = 0
-        } layouttime += time.realdelta
+        } layouttime += time.delta
       }
       $.circlesize = 15, $.linewidth = circlesize / 7
       $.target_length = circlesize * 10, $.friction = 0.01
@@ -1477,8 +1487,7 @@
 
       let vcsenventregisted = false, filechange
       const _fchd = ({ o }) => filechange?.(o)
-      $.registerVCSevent = () => vcs.on('file change', _fchd)
-      $.unregisterVCSevent = () => vcs.off('file change', _fchd)
+      $.registerVCSevent = () => vcs.onweak('file change', _fchd)
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
@@ -1696,7 +1705,7 @@ $.opensb = ({ o }) => {
   tab.style.height = '100%'
   tab.append(tbt, sb.configtab)
   const tb = dk3.adddock(sb, tab)
-  tb.setclosable(() => { sb.unregisterVCSevent(); return true })
+  tb.setclosable(() => true)
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
   return sb
@@ -1729,7 +1738,7 @@ const localsave = async dir => {
   list = await Promise.all(list.map(read))
   const a = data.hashobj = []; list.forEach(h => a.push(JSON.parse(h)))
   vcs.clear(); vcs.deserialization(data)
-}, save = async () => {
+}, save = debounceasync(async () => {
   if (typeof repo !== 'string') { throw Error(`Can't save due to internal error.`) }
   if (userland) {
     const topdir = await opfs.writedir('__REPOS_33f39fa383894937__')
@@ -1742,7 +1751,7 @@ const localsave = async dir => {
       // await localsave(await opfs.readdir(repo, topdir))
     }
   }
-}, load = async () => {
+}), load = async () => {
   const sp = new URLSearchParams(location.search)
   userland = sp.get('user') ?? sp.get('userland')
   $.repo = sp.get('repo'); if (userland) {

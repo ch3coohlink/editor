@@ -1,0 +1,1 @@
+{"id":"37916d6e94af6e60168a95409071103d7556aadc834ac2e0363c2c13da075d7c","to":[],"value":"const { log } = console\r\nconsole.clear()\r\nconst a = new WeakRef({})\r\nsetTimeout(() => log(a.deref()), 5000)"}

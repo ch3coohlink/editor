@@ -49,6 +49,8 @@
 - [x] use max distance instead of last distance in node click
 - [ ] global modified state to prevent unsaved data lost
 - [ ] auto save
+- [x] debounce save
+- [x] make eventnode use weakref
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
         which means you don't need to save them
