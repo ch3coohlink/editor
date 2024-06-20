@@ -1482,7 +1482,6 @@
         clidiv.style.whiteSpace = 'pre-wrap'
         clictn.style.maxWidth = '1000px'
         domdiv.style.height = '100%'
-        domdiv.style.overflow = 'auto'
         togglecli()
       } $.append(domdiv, clidiv)
 
@@ -1548,6 +1547,8 @@
         const domctn = dom(); domdiv.append(domctn)
         const shadowroot = domctn.attachShadow({ mode: 'open' })
         const root = dom(); shadowroot.append(root)
+        domctn.style.height = root.style.height = '100%'
+        root.style.overflow = 'auto'
         const env = { root, ...timeoutfunctions, ...constructorpacker }
         env.$$ = window.$
 
@@ -1596,11 +1597,11 @@
             const n = parseFloat(a[0])
             if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
           } let file; try { file = vcs.read(readver, a) } catch (e) { throw WRONGPATH }
-          const { o, used, ver } = file, rp = vcs.getpath(o).join('/'), id = o.id
-          if (isv && replaces.has(id)) { return [rp, replaces.get(id), ver, id] }
-          if (o.type !== 'file') { throw WRONGPATH }
-          [...used].forEach(v => watch.add(v.id)); watch.add(id)
-          return [rp, vcs.g[o.value].value, ver, id]
+          const { o, used, ver } = file, id = o.id
+          if (o.type !== 'file') { throw WRONGPATH } let text = vcs.g[o.value].value
+          if (isv && replaces.has(id)) { text = replaces.get(id) }
+          else { watch.add(id) } [...used].forEach(v => watch.add(v.id))
+          return [p, text, readver, id]
         }, loadtext = (...a) => load(...a)[1]
         env.__readfile = b => p => loadtext(solvepath(b, p))
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
