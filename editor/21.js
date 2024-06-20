@@ -1584,10 +1584,10 @@
           error: (...a) => _error(false, ...a)
         }
 
-        const watch = new Set([target])
+        const watch = new Set()
         if (!vcsenventregisted) { registerVCSevent() }
         const reload = debounce(() => $.exec(), 0)
-        filechange = o => watch.has(o) ? reload() : 0
+        filechange = o => watch.has(o.id) ? reload() : 0
 
         const load = p => {
           const WRONGPATH = Error(`Invalid path: ${p}`)
@@ -1596,32 +1596,31 @@
             const n = parseFloat(a[0])
             if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
           } let file; try { file = vcs.read(readver, a) } catch (e) { throw WRONGPATH }
-          if (isv && a.join('/') === filepath && readver === rootver) {
-            return { text: content, ver: rootver }
-          } else {
-            const { o, used, ver } = file; watch.add(o)
-              ;[...used].forEach(v => watch.add(v))
-            if (o.type !== 'file') { throw WRONGPATH }
-            return { text: vcs.g[o.value].value, ver, file: o }
-          }
-        }
-        env.__readfile = b => p => load(solvepath(b, p))
+          const { o, used, ver } = file, rp = vcs.getpath(o).join('/'), id = o.id
+          if (isv && replaces.has(id)) { return [rp, replaces.get(id), ver, id] }
+          if (o.type !== 'file') { throw WRONGPATH }
+          [...used].forEach(v => watch.add(v.id)); watch.add(id)
+          return [rp, vcs.g[o.value].value, ver, id]
+        }, loadtext = (...a) => load(...a)[1]
+        env.__readfile = b => p => loadtext(solvepath(b, p))
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
-          const data = await load(p); if (loaded.has(data.file)) { return }
-          loaded.add(data.file); await exec(p, data.text, data.ver)
+          const data = await load(p), file = data.pop()
+          if (loaded.has(file)) { return } loaded.add(file); await exec(...data)
         }; const loaded = new Set, AF = (async () => { }).constructor
-        const solvepath = (base, path) => base + (path.startsWith('/') || base === '' ? '' : '/') + path
+        const solvepath = (b, p) => b + (p.startsWith('/') || b === '' ? '' : '/') + p
         const exec = (path, src, ver) => new AF('$',
-          `//# sourceURL=${ver.slice(0, 8) + '/' + path}\n` +
+          `//# sourceURL=${ver.slice(0, 16) + '/' + path}\n` +
           `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
           `const readfile = $.__readfile(__dirname)\n` +
           `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)
 
         const isv = target.type === 'virtual'
-        let path; if (!isv) { path = vcs.getpath(target) }
-        const [filepath, content, rootver, links] = isv ? target.getfile()
+        let path; if (!isv) { path = vcs.getpath(target); watch.add(target.id) }
+        let [filepath, content, rootver, links, replaces] = isv ? target.getfile()
           : [path.join('/'), vcs.g[target.value].value, path.version.id]
         if (links) { env.__links = links } log(filepath, content, rootver, links)
+        if (!replaces) { replaces = new Map }
+
         try { await exec(filepath, content, rootver) }
         catch (e) { _error(true, e); console.error(e) }
       }

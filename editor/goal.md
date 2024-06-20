@@ -51,7 +51,7 @@
 - [ ] auto save
 - [x] debounce save
 - [x] make eventnode use weakref
-- [ ] sandbox support virtual file
+- [x] sandbox support virtual file
 - [ ] conflict editor
   - [ ] delay the conflict data generation to solve time, 
         which means you don't need to save them
