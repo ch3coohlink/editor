@@ -587,7 +587,8 @@
   $.vcs = ($ = graph()) => {
     with ($) {
       $.locatebypath = (id, path = '') => {
-        if (!Array.isArray(path)) { path = path.split('/') }
+        let opath = Array.isArray(path) ? path.join('/') : path
+        if (typeof path === 'string') { path = path.split('/').filter(v => v) }
         const links = [], used = new Set
         let o = g[id], name, p; while (path.length > 0) {
           const t = o.type; if (t === 'link') {
@@ -596,12 +597,12 @@
           else if (name === '..') {
             if (t !== 'version') { used.add(o); p = o; o = getfrom(o) }
             else if (links.length > 1) { p = o; o = links.pop() }
-            else { throw Error(`Invalid path: "${path}"`) }
+            else { throw Error(`Invalid path: "${opath}"`) }
           } else {
             used.add(o); p = o; o = g[o.children[name]]
-            if (!o) { throw Error(`Invalid path: "${path}"`) }
+            if (!o) { throw Error(`Invalid path: "${opath}"`) }
           }
-        } return { o, used, ver: getversion(o) }
+        } return { o, used, ver: getversion(o).id }
       }; $.read = locatebypath
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
@@ -708,7 +709,7 @@
         const p = []; while (n.type !== 'version') {
           const on = n; n = getfrom(n)
           p.unshift(n.to[on.id].name)
-        } return { version: n, path: p }
+        } p.version = n; return p
       }
     } return $
   }
@@ -1448,7 +1449,7 @@
         configtab.addEventListener('pointerdown', e => e.preventDefault())
         $.style.height = '100%'
         $.style.position = 'relative'
-      } $.path = false
+      }
 
       const domdiv = dom(), clidiv = dom(), clictn = dom(); { // cli style
         clidiv.classList.add('no-scroll-bar')
@@ -1544,8 +1545,6 @@
 
         clear()
 
-        if (!path) { path = vcs.getpath(target) }
-
         const domctn = dom(); domdiv.append(domctn)
         const shadowroot = domctn.attachShadow({ mode: 'open' })
         const root = dom(); shadowroot.append(root)
@@ -1591,33 +1590,38 @@
         filechange = o => watch.has(o) ? reload() : 0
 
         const load = p => {
+          const WRONGPATH = Error(`Invalid path: ${p}`)
+          const a = p.split('/').filter(v => v)
           let readver = rootver; if (isv) {
-            const a = p.split('/'), n = parseFloat(a[0])
-            if (!Number.isNaN(n) && n >= 0) { readver = links[n], p = (a.shift(), a.join('/')) }
-          } if (isv && p === filepath && readver === rootver
-          ) { return { text: content, ver: rootver } } else {
-            const { o, used, ver } = vcs.read(readver, p); watch.add(o)
+            const n = parseFloat(a[0])
+            if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
+          } let file; try { file = vcs.read(readver, a) } catch (e) { throw WRONGPATH }
+          if (isv && a.join('/') === filepath && readver === rootver) {
+            return { text: content, ver: rootver }
+          } else {
+            const { o, used, ver } = file; watch.add(o)
               ;[...used].forEach(v => watch.add(v))
-            if (o.type !== 'file') { throw new Error('Invalid path for a file.') }
-            return { text: vcs.g[o.value].value, ver }
+            if (o.type !== 'file') { throw WRONGPATH }
+            return { text: vcs.g[o.value].value, ver, file: o }
           }
         }
         env.__readfile = b => p => load(solvepath(b, p))
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
-          if (loaded.has(p)) { return } const data = await load(p)
-          await exec(p, data.text, data.ver)
+          const data = await load(p); if (loaded.has(data.file)) { return }
+          loaded.add(data.file); await exec(p, data.text, data.ver)
         }; const loaded = new Set, AF = (async () => { }).constructor
-        const solvepath = (base, path) => base + (path.startsWith('/') ? '' : '/') + path
-        const exec = async (path, src, v) => (loaded.add(path), await (
-          new AF('$', `//# sourceURL=${v.id.slice(0, 8) + '/' + path}\n` +
-            `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
-            `const readfile = $.__readfile(__dirname)\n` +
-            `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)))
+        const solvepath = (base, path) => base + (path.startsWith('/') || base === '' ? '' : '/') + path
+        const exec = (path, src, ver) => new AF('$',
+          `//# sourceURL=${ver.slice(0, 8) + '/' + path}\n` +
+          `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
+          `const readfile = $.__readfile(__dirname)\n` +
+          `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)
 
         const isv = target.type === 'virtual'
+        let path; if (!isv) { path = vcs.getpath(target) }
         const [filepath, content, rootver, links] = isv ? target.getfile()
-          : [path.path.join('/'), vcs.g[target.value].value, path.version.id]
-        if (links) { env.__links = links }
+          : [path.join('/'), vcs.g[target.value].value, path.version.id]
+        if (links) { env.__links = links } log(filepath, content, rootver, links)
         try { await exec(filepath, content, rootver) }
         catch (e) { _error(true, e); console.error(e) }
       }
