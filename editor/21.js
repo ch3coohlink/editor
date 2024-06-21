@@ -32,7 +32,7 @@
       let i = 0, giveid = (f, id = i++) => typeof f[es] === 'number' ? f[es] : f[es] = id
       $.emit = (t, ...arg) => {
         const ht = _handles[t]
-        if (d) { da.push((arg.unshift(t), arg)) } else if (ht) {
+        if (lock > 0) { da.push((arg.unshift(t), arg)) } else if (ht) {
           const a = [], b = []; for (let [id, f] of ht) {
             f = f.deref ? f.deref() : f; f ? a.push(f) : b.push(id)
           } for (const i of b) { ht.delete(i) }
@@ -40,8 +40,12 @@
         }
       }; $.on = (t, f) => (_handles[t] ??= new Map).set(giveid(f), f)
       $.onweak = (t, f) => (_handles[t] ??= new Map).set(giveid(f), new WeakRef(f))
-      let d = false, da = []; $.setdelay = () => { d = true }
-      $.enddelay = () => { d = false; for (const a of da) { emit(...a) } da = [] }
+      let da = [], lock = 0
+      $.setdelay = (locklevel = 1) => { lock = Math.max(locklevel, lock) }
+      $.enddelay = (unlocklevel = 1) => {
+        if (unlocklevel < lock) { return }
+        lock = 0; for (const a of da) { emit(...a) } da = []
+      }
       $.off = (t, f) => (_handles[t]?.delete(f[es]),
         _handles[t].size > 0 ? 0 : delete _handles[t])
     } return $
@@ -586,7 +590,7 @@
   }
   $.vcs = ($ = graph()) => {
     with ($) {
-      $.locatebypath = (id, path = '') => {
+      $.locatebypath = (id, path = '', forcecreate = false) => {
         let opath = Array.isArray(path) ? path.join('/') : path
         if (typeof path === 'string') { path = path.split('/').filter(v => v) }
         const links = [], used = new Set
@@ -600,9 +604,12 @@
             else { throw Error(`Invalid path: "${opath}"`) }
           } else {
             used.add(o); p = o; o = g[o.children[name]]
-            if (!o) { throw Error(`Invalid path: "${opath}"`) }
+            if (!o) {
+              if (forcecreate) { o = writedir(p, name) }
+              else { throw Error(`Invalid path: "${opath}"`) }
+            }
           }
-        } return { o, used, ver: getversion(o).id }
+        } return { o, used }
       }; $.read = locatebypath
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
@@ -610,6 +617,17 @@
       $.checkname = n => {
         if (n !== '' && n.indexOf('/') < 0) { }
         else { throw `Invalid file name: ${n}` }
+      }
+      $.write = (ver, path, file, opt = { create: true }) => {
+        let a; if (Array.isArray(path)) { a = path }
+        else { a = path.split('/').filter(v => v) } const n = a.pop()
+        setdelay(2); const l = locatebypath(ver, a, opt.create)
+        let f, t = file.shift(); switch (t) {
+          case 'file': f = writefile(l.o.id, n, ...file); break
+          case 'dir': f = writedir(l.o.id, n, ...file); break
+          case 'link': f = writelink(l.o.id, n, ...file); break
+          default: throw Error(`Unknown file type: ${t}`)
+        } enddelay(2); return f
       }
       $.writefile = (loc, name, text, force, h = hexenc(sha256(text))) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
@@ -1256,7 +1274,7 @@
           d.append(i, b); dialogdv.append(d); i.focus()
           return p
         })
-        $.pickonedialog = dialogprocess(async () => {
+        $.pickonedialog = dialogprocess(async (tp = 'version') => {
           elm.style.background = '#00000022'
           const bk = dialogdv.style.background
           dialogdv.style.background = ''
@@ -1273,7 +1291,7 @@
           d.style.borderTopRightRadius = ''
           d.style.placeSelf = 'flex-start'
           d.style.padding = '10px 20px'
-          t.textContent = 'pick a node'
+          t.textContent = `pick a ${tp} node`
           t.style.paddingRight = '10px'
           b.onclick = () => j(userend)
           d.append(t, b); dialogdv.append(d); return p
@@ -1480,6 +1498,7 @@
         clidiv.style.textShadow = '0px 0px 4px #000000a1'
         clidiv.style.fontFamily = 'consolas'
         clidiv.style.whiteSpace = 'pre-wrap'
+        clidiv.style.wordWrap = 'break-word'
         clictn.style.maxWidth = '1000px'
         domdiv.style.height = '100%'
         togglecli()
@@ -1597,13 +1616,21 @@
             const n = parseFloat(a[0])
             if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
           } let file; try { file = vcs.read(readver, a) } catch (e) { throw WRONGPATH }
-          const { o, used, ver } = file, id = o.id
+          const { o, used } = file, id = o.id
           if (o.type !== 'file') { throw WRONGPATH } let text = vcs.g[o.value].value
           if (isv && replaces.has(id)) { text = replaces.get(id) }
           else { watch.add(id) } [...used].forEach(v => watch.add(v.id))
           return [p, text, readver, id]
         }, loadtext = (...a) => load(...a)[1]
         env.__readfile = b => p => loadtext(solvepath(b, p))
+        env.__writefile = b => (p, t, force = false) => {
+          p = solvepath(b, p)
+          const a = p.split('/').filter(v => v)
+          let readver = rootver; if (isv) {
+            const n = parseFloat(a[0])
+            if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
+          } vcs.write(readver, a, ['file', t, force])
+        }
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
           const data = await load(p), file = data.pop()
           if (loaded.has(file)) { return } loaded.add(file); await exec(...data)
@@ -1613,13 +1640,14 @@
           `//# sourceURL=${ver.slice(0, 16) + '/' + path}\n` +
           `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
           `const readfile = $.__readfile(__dirname)\n` +
+          `const writefile = $.__writefile(__dirname)\n` +
           `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)
 
         const isv = target.type === 'virtual'
         let path; if (!isv) { path = vcs.getpath(target); watch.add(target.id) }
         let [filepath, content, rootver, links, replaces] = isv ? target.getfile()
           : [path.join('/'), vcs.g[target.value].value, path.version.id]
-        if (links) { env.__links = links } log(filepath, content, rootver, links)
+        if (links) { env.__links = links } // log(filepath, content, rootver, links)
         if (!replaces) { replaces = new Map }
 
         try { await exec(filepath, content, rootver) }
