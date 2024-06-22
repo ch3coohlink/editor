@@ -1634,15 +1634,17 @@
         }
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
           const data = await load(p, { watch: true }), file = data.pop()
-          if (loaded.has(file)) { return } loaded.add(file); await exec(...data)
-        }; const loaded = new Set, AF = (async () => { }).constructor
+          if (loaded.has(file)) { return loaded.get(file) }
+          const ex = await exec(...data); loaded.set(file, ex); return ex
+        }; const loaded = new Map, AF = (async () => { }).constructor
         const solvepath = (b, p) => b + (p.startsWith('/') || b === '' ? '' : '/') + p
         const exec = (path, src, ver) => new AF('$',
           `//# sourceURL=${ver.slice(0, 16) + '/' + path}\n` +
           `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
           `const readfile = $.__readfile(__dirname)\n` +
           `const writefile = $.__writefile(__dirname)\n` +
-          `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}`)(env)
+          `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}` +
+          `\n return $`)(Object.create(env))
 
         const isv = target.type === 'virtual'
         let path; if (!isv) { path = vcs.getpath(target); watch.add(target.id) }
