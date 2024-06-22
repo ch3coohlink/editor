@@ -1609,7 +1609,7 @@
         const reload = debounce(() => $.exec(), 0)
         filechange = o => watch.has(o.id) ? reload() : 0
 
-        const load = p => {
+        const load = (p, opt = {}) => {
           const WRONGPATH = Error(`Invalid path: ${p}`)
           const a = p.split('/').filter(v => v)
           let readver = rootver; if (isv) {
@@ -1619,10 +1619,11 @@
           const { o, used } = file, id = o.id
           if (o.type !== 'file') { throw WRONGPATH } let text = vcs.g[o.value].value
           if (isv && replaces.has(id)) { text = replaces.get(id) }
-          else { watch.add(id) } [...used].forEach(v => watch.add(v.id))
+          else if (opt.watch) { watch.add(id) }
+          if (opt.watch) { [...used].forEach(v => watch.add(v.id)) }
           return [p, text, readver, id]
         }, loadtext = (...a) => load(...a)[1]
-        env.__readfile = b => p => loadtext(solvepath(b, p))
+        env.__readfile = b => (p, opt) => loadtext(solvepath(b, p), opt)
         env.__writefile = b => (p, t, force = false) => {
           p = solvepath(b, p)
           const a = p.split('/').filter(v => v)
@@ -1632,7 +1633,7 @@
           } vcs.write(readver, a, ['file', t, force])
         }
         env.__require = b => async (ph, p = solvepath(b, ph)) => {
-          const data = await load(p), file = data.pop()
+          const data = await load(p, { watch: true }), file = data.pop()
           if (loaded.has(file)) { return } loaded.add(file); await exec(...data)
         }; const loaded = new Set, AF = (async () => { }).constructor
         const solvepath = (b, p) => b + (p.startsWith('/') || b === '' ? '' : '/') + p
