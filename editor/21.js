@@ -1831,6 +1831,7 @@ const connectdevserver = () => {
     send('writerepo', { repo, name, text: JSON.stringify(text) })
   return new Promise(a => r = a)
 }
+$.globalsave = save
 
 { // main
   window.$ = $
