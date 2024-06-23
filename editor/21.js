@@ -300,7 +300,7 @@
       })
       Object.defineProperty($, 'size', { get: () => arr.length })
       const dcstr = () => (df ? 'ns' : 'ew') + '-resize'
-      const dragbarsize = 4, layout = r => {
+      const dragbarsize = 2, layout = r => {
         if (!r) { r = $.rect ?? parentctn.requestrect($) }
         $.rect = r; const l = arr.length, size = (df
           ? r.height : r.width) - (l - 1) * dragbarsize
@@ -342,29 +342,29 @@
         const d = dom(); {
           d.className = 'dragbar'
           d.style.position = 'absolute'
+          d.style.background = '#c9c9c9'
           d.style.userSelect = 'none'
           d.style.cursor = dcstr()
         } const inner = dom(); d.append(inner); {
           const reset = d.reset = () => {
             inner.style.position = 'absolute'
             inner.style.background = 'black'
+            inner.style.transition = 'opacity 0.1s, height 0.1s, top 0.1s, width 0.1s, left 0.1s'
             if (df) {
-              inner.style.transition = 'opacity 0.1s, height 0.1s, top 0.1s'
               inner.style.height = dragbarsize + 'px'
               inner.style.width = '100%'
             } else {
-              inner.style.transition = 'opacity 0.1s, width 0.1s, left 0.1s'
               inner.style.width = dragbarsize + 'px'
               inner.style.height = '100%'
             }
             inner.style.left = '0px'
             inner.style.top = '0px'
             inner.style.zIndex = '100'
-            inner.style.opacity = '0.2'
+            inner.style.opacity = '0'
             inner.style.userSelect = 'none'
           }; reset()
           inner.addEventListener('pointerenter', () => {
-            inner.style.opacity = '0.3'
+            inner.style.opacity = '0.2'
             if (df) {
               inner.style.height = '20px'
               inner.style.top = dragbarsize / 2 - 10 + 'px'
