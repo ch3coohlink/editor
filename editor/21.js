@@ -284,83 +284,116 @@
 .no-scroll-bar::-webkit-scrollbar { 
   display: none;  /* Safari and Chrome */
 }`; document.head.append(s)
-} { // docker system ----------------------------------------------------------
-  $.splitctn = ($ = dom()) => {
-    with ($) {
-      $.arr = []; let df; {
-        className = 'split-container'
-        style.width = style.height = '100%'
-        style.flexBasis = '100%'
-        style.display = 'flex'
-        Object.defineProperty($, 'direction', {
-          set: v => {
-            df = v === 'vertical'
-            style.flexDirection = df ? 'column' : 'row'
-            let c = dcstr(); for (const e of children)
-              if (dragbar.is(e)) { e.style.cursor = c }
-          }, get: () => df ? 'vertical' : 'horizontal',
-        })
-      } Object.defineProperty($, 'size', { get: () => arr.length })
+} { // docking system ----------------------------------------------------------
+  $.splitctn = (parentctn, $ = eventnode({})) => {
+    $.parentctn = parentctn; with ($) {
+      $.sizebase = [1, 1]
+      $.arr = []; let df = false
+      Object.defineProperty($, 'direction', {
+        set: v => {
+          df = v === 'vertical'; let c = dcstr()
+          for (const e of dragbars) { e.style.cursor = c } layout()
+        }, get: () => df ? 'vertical' : 'horizontal',
+      })
+      Object.defineProperty($, 'size', { get: () => arr.length })
       const dcstr = () => (df ? 'ns' : 'ew') + '-resize'
-      const dragbar = () => {
+      const dragbarsize = 4, layout = r => {
+        if (!r) { r = $.rect ?? parentctn.requestrect($) }
+        $.rect = r; const l = arr.length, size = (df
+          ? r.height : r.width) - (l - 1) * dragbarsize
+        const op = df ? 1 : 0
+        let sum = 0; arr.forEach(e => sum += e.sizebase[op])
+        let xory = 0; for (let i = 0; i < l; i++) {
+          const elm = arr[i], bar = dragbars[i]
+          let childrect; if (df) {
+            childrect = {
+              top: xory, left: r.left, width: r.width,
+              height: xory += size * elm.sizebase[op] / sum,
+            }; if (bar) {
+              bar.style.top = xory + 'px'
+              bar.style.left = r.left + 'px'
+              bar.style.width = r.width + 'px'
+              bar.style.height = dragbarsize + 'px'
+            }
+          } else {
+            childrect = {
+              top: r.top, left: xory, height: r.height,
+              width: xory += size * elm.sizebase[op] / sum,
+            }; if (bar) {
+              bar.style.left = xory + 'px'
+              bar.style.top = r.top + 'px'
+              bar.style.height = r.height + 'px'
+              bar.style.width = dragbarsize + 'px'
+            }
+          } const styles = {}
+          for (const k in childrect) { styles[k] = childrect[k] + 'px' }
+          if (elm.style) { Object.assign(elm.style, styles) }
+          elm.rect = childrect
+          elm.emit?.('resize', childrect)
+          xory += dragbarsize
+        }
+      }
+      $.requestrect = $ => (layout(), $.rect)
+      const dragbar = i => {
         const d = dom(); {
           d.className = 'dragbar'
-          d.style.flexBasis = '2px'
-          d.style.flexShrink = '0'
+          d.style.position = 'absolute'
           d.style.background = '#c9c9c9'
           d.style.userSelect = 'none'
           d.style.cursor = dcstr()
         }
         listenpointerdown(d, e => {
-          const c = [...children]
-          const i = c.indexOf(d)
-          const a = c[i - 1], b = c[i + 1]
-          const ab = a.getBoundingClientRect()
-          const bb = b.getBoundingClientRect()
-          const cb = d.getBoundingClientRect()
+          const a = arr.slice(0, i), b = arr.slice(i)
+          const r = $.rect, op = df ? 1 : 0
           const m = e => {
-            const p = geteventlocation(e)
-            let r; if (df) {
-              r = (p.y - ab.top) / (ab.height + bb.height + cb.height)
-            } else {
-              r = (p.x - ab.left) / (ab.width + bb.width + cb.width)
-            }
-            a.style.flexBasis = (clamp(r, 0, 1) * 100).toFixed(0) + '%'
-            b.style.flexBasis = ((1 - clamp(r, 0, 1)) * 100).toFixed(0) + '%'
+            const p = geteventlocation(e), ratio = clamp(df
+              ? (p.y - r.top) / r.height : (p.x - r.left) / r.width, 0, 1)
+            a.forEach((e, i) => e.sizebase[op] = ratio / a.length)
+            b.forEach((e, i) => e.sizebase[op] = (1 - ratio) / b.length)
+            layout()
           }
           listenpointermove(m); listenpointerup(() => cancelpointermove(m))
         })
+        docksys.append(d)
         return d
-      }, del = () => splitctn.is(parentNode) ?
-        parentNode.delitem($) : $.remove()
+      }, del = () => (
+        dragbars.forEach(b => b.remove()),
+        splitctn.is(parentNode) ? parentNode.delitem($) : 0)
       dragbar.is = n => n.classList.contains('dragbar')
+      $.dragbars = []
       $.update = () => {
-        $.innerHTML = ''; let a = [], l = arr.length - 1
-        if (l < 0) { return } for (let i = 0; i < l; i++) {
-          a.push(arr[i], dragbar())
-        } a.push(arr[l]); $.append(...a)
-        arr.forEach(e => e.style.flexBasis = '100%')
+        log('update')
+        let dsl = dragbars.length, d = arr.length - 1 - dsl
+        for (const e of arr) {
+          e.parentctn = $
+          if (!(e instanceof HTMLElement)) { return }
+          if (e.parentNode === docksys) { return }
+          docksys.append(e)
+        }
+        dragbars.forEach(b => b.remove())
+        dragbars = arr.map((_, i) => dragbar(i + 1))
+        layout()
       }
       $.getindex = e => arr.indexOf(e)
       $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
-      $.rplitem = (a, b, i = arr.indexOf(a)) => i >= 0
-        ? (delitem(a), additem(b, i)) : 0
+      $.rplitem = (a, b, i = arr.indexOf(a)) => { arr.splice(i, 1, b), update() }
       $.delitem = (e, i = getindex(e)) => {
         if (i >= 0) { arr.splice(i, 1), update() }
         else return; if (size === 0) { del() }
       }
-      direction = 'vertical'
+      on('resize', layout)
+      $.type = 'split-container'
     } return $
-  }; splitctn.is = n => n.classList.contains('split-container')
+  }; splitctn.is = n => n.type === 'split-container'
   $.docking = ($ = dom()) => {
     with ($) {
       { // style ----------------------------------------------------------------
-        className = 'docking'
+        $.sizebase = [1, 1]
+        className = $.type = 'docking'
+        style.position = 'absolute'
         style.display = 'flex'
-        style.flexBasis = '100%'
         style.flexDirection = 'column'
         style.overflow = 'hidden'
-        style.position = 'relative'
       } $.tabs = dom(); {
         tabs.className = 'tab-list'
         tabs.style.height = '30px'
@@ -467,7 +500,7 @@
       }
       $.split = (te, d) => {
         let s = (o, d = 'horizontal') => {
-          let pt = parentNode; dk = docking()
+          let pt = parentctn; dk = docking()
           if (pt.size > 1 && pt.direction !== d) { pt = makecontain() }
           pt.additem(dk, pt.getindex($) + o), pt.direction = d
         }, dk = $; te.undock(); switch (d) {
@@ -513,30 +546,54 @@
         }); return te
       }
       $.deldock = (te, e = (te.remove(), tabs.children[tabs.children
-        .length - 1])) => e ? focustab(e) : parentNode.delitem($)
-      $.makecontain = (p = splitctn()) => (
-        parentNode.rplitem($, p), p.additem($), p)
+        .length - 1])) => e ? focustab(e) : parentctn.delitem($)
+      $.makecontain = (p = splitctn(parentctn)) => (
+        parentctn.rplitem($, p), p.additem($), p)
     } return $
   }
-  $.docksys = eventnode()
-  docksys.on('layout change', () => {
-    let tree = (c, a = []) => {
-      if (!a.direction) { a.direction = c.direction }
-      for (const e of c.arr) {
-        if (splitctn.is(e)) {
-          if (e.size === 1) { tree(e, a) }
-          else if (e.direction === c.direction) { tree(e, a) }
-          else { let t = []; a.push(t); tree(e, t) }
-        } else { a.push(e) }
-      } return a
-    }
-    let build = (a, c = splitctn()) => {
-      c.arr = [], c.direction = a.direction; for (const e of a) {
-        c.arr.push(Array.isArray(e) ? build(e) : e)
-      } c.update(); return c
-    }
-    build(tree(sc), sc)
-  })
+  $.docksys = (($ = eventnode(dom())) => {
+    with ($) {
+      style.position = 'relative'
+      style.height = style.width = '100%'
+      $.layout = () => { root.emit('resize', $.getBoundingClientRect()) }
+      $.root = splitctn($)
+      $.requestrect = () => $.getBoundingClientRect()
+      $.logdk = () => {
+        const a = ['ctn'], f = (e, i = 1) => {
+          for (const c of e.arr ?? e.children) {
+            if (splitctn.is(c)) { a.push('|-'.repeat(i) + 'ctn') }
+            else if (c.classList?.contains('single-tab')) { a.push('|-'.repeat(i) + c.innerText) }
+            else if (c.type === 'docking') { a.push('--'.repeat(i) + 'dock') }
+            else { a.push('|-'.repeat(i) + c.className) } // a.push('|-'.repeat(i))
+            if (splitctn.is(c)) { f(c, i + 1) }
+            if (c.type === 'docking') { f(c.tabs, i + 1) }
+          }
+        }
+        f(root)
+        log(a.join('\n'))
+      }
+      const ro = new ResizeObserver(layout); ro.observe($)
+      on('layout change', () => {
+        let tree = (c, a = []) => {
+          if (!a.direction) { a.direction = c.direction }
+          for (const e of c.arr) {
+            if (splitctn.is(e)) {
+              if (e.size === 1) { tree(e, a) }
+              else if (e.direction === c.direction) { tree(e, a) }
+              else { let t = []; a.push(t); tree(e, t) }
+            } else { a.push(e) }
+          } return a
+        }
+        let build = (a, c = splitctn()) => {
+          c.arr = [], c.direction = a.direction; for (const e of a) {
+            c.arr.push(Array.isArray(e) ? build(e) : e)
+          } c.update(); return c
+        }
+        logdk()
+        // build(tree(sc), sc)
+      })
+    } return $
+  })()
 } { // vcs --------------------------------------------------------------------
   $.graph = ($ = eventnode({ g: {} })) => {
     with ($) {
@@ -1609,42 +1666,47 @@
         const reload = debounce(() => $.exec(), 0)
         filechange = o => watch.has(o.id) ? reload() : 0
 
-        const load = (p, opt = {}) => {
-          const WRONGPATH = Error(`Invalid path: ${p}`)
-          const a = p.split('/').filter(v => v)
-          let readver = rootver; if (isv) {
-            const n = parseFloat(a[0])
-            if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
-          } let file; try { file = vcs.read(readver, a) } catch (e) { throw WRONGPATH }
+        const WRONGPATH = p => Error(`Invalid path: ${p}`)
+        const virtuallink = (v, a, fst) => {
+          if (!isv || !fst || !links) { return v } const n = parseFloat(a[0])
+          if (Number.isNaN(n) || n < 0 || links.length <= n) { return v }
+          a.shift(); return links[n]
+        }, solvepath = (b, p) => b + (
+          p.startsWith('/') || b === '' || b.endsWith('/') ? '' : '/') + p
+
+        const load = (ver, p, fst, opt = {}, textonly = false) => {
+          const a = p.split('/').filter(v => v), readver = virtuallink(ver, a, fst)
+          let file; try { file = vcs.read(readver, a) } catch { throw WRONGPATH(p) }
           const { o, used } = file, id = o.id
-          if (o.type !== 'file') { throw WRONGPATH } let text = vcs.g[o.value].value
+          if (o.type !== 'file') { throw WRONGPATH(p) }
+          let text = vcs.g[o.value].value
           if (isv && replaces.has(id)) { text = replaces.get(id) }
           else if (opt.watch) { watch.add(id) }
           if (opt.watch) { [...used].forEach(v => watch.add(v.id)) }
-          return [p, text, readver, id]
-        }, loadtext = (...a) => load(...a)[1]
-        env.__readfile = b => (p, opt) => loadtext(solvepath(b, p), opt)
-        env.__writefile = b => (p, t, force = false) => {
-          p = solvepath(b, p)
-          const a = p.split('/').filter(v => v)
-          let readver = rootver; if (isv) {
-            const n = parseFloat(a[0])
-            if (!Number.isNaN(n) && n >= 0) { readver = links[n], a.shift() }
-          } vcs.write(readver, a, ['file', t, force])
+          if (textonly) { return text } const rp = vcs.getpath(o) // real path
+          const r = [rp.version.id, rp.join('/'), text]; r.id = id; return r
+        }, loadtext = (...a) => load(...a, true)
+
+        env.__readfile = (v, b, fst) => (p, opt) => loadtext(v, solvepath(b, p), fst, opt)
+        env.__writefile = (v, b, fst) => (p, t, force = false) => {
+          p = solvepath(b, p); const a = p.split('/').filter(v => v)
+          try { vcs.write(virtuallink(v, a, fst), a, ['file', t, force]) }
+          catch { throw WRONGPATH(p) }
         }
-        env.__require = b => async (ph, p = solvepath(b, ph)) => {
-          const data = await load(p, { watch: true }), file = data.pop()
+        env.__require = (v, b, fst) => async (ph, p = solvepath(b, ph)) => {
+          const data = await load(v, p, fst, { watch: true }), file = data.id
           if (loaded.has(file)) { return loaded.get(file) }
           const ex = await exec(...data); loaded.set(file, ex); return ex
-        }; const loaded = new Map, AF = (async () => { }).constructor
-        const solvepath = (b, p) => b + (p.startsWith('/') || b === '' ? '' : '/') + p
-        const exec = (path, src, ver) => new AF('$',
-          `//# sourceURL=${ver.slice(0, 16) + '/' + path}\n` +
+        }
+
+        const loaded = new Map, AF = (async () => { }).constructor
+        const exec = (ver, path, src, first = false) => new AF('$',
+          `//# sourceURL=${ver.slice(0, 16) + '/' + path}\nconst __repoid = '${ver}'\n` +
           `const __dirname = '${path.split('/').slice(0, -1).join('/')}'\n` +
-          `const readfile = $.__readfile(__dirname)\n` +
-          `const writefile = $.__writefile(__dirname)\n` +
-          `const require = $.__require(__dirname)\n` + `with($) {\n${src}\n}` +
-          `\n return $`)(Object.create(env))
+          `const readfile = $.__readfile(__repoid, __dirname, ${first})\n` +
+          `const writefile = $.__writefile(__repoid, __dirname, ${first})\n` +
+          `const require = $.__require(__repoid, __dirname, ${first})\n` +
+          `with($) {\n${src}\n}\n return $`)(Object.create(env))
 
         const isv = target.type === 'virtual'
         let path; if (!isv) { path = vcs.getpath(target); watch.add(target.id) }
@@ -1653,7 +1715,7 @@
         if (links) { env.__links = links } // log(filepath, content, rootver, links)
         if (!replaces) { replaces = new Map }
 
-        try { await exec(filepath, content, rootver) }
+        try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
       }
     } return $
@@ -1722,7 +1784,8 @@ $.opente = ({ o }) => {
   }, caln = () => (v.lock ? '🚫' : '') + v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name + (cgd ? ' *' : '')
   const n = caln(), ext = n.split('.').pop()
-  te.change_language({ js: 'javascript' }[ext] ?? 'plain text')
+  const extname = { js: 'javascript', json: 'json' }
+  te.change_language(extname[ext] ?? 'plain text')
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
   tb.setclosable((b = cgd) => (
@@ -1738,7 +1801,6 @@ $.opensb = ({ o }) => {
   const sb = sandboxtab(vcs, o), v = vcs.getversion(o)
   const n = v.id.slice(0, 8) + '/' +
     o.from[Object.keys(o.from)[0]].to[o.id].name
-  if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
   const tab = dom(), tbt = dom('span')
   tbt.textContent = n
   tbt.style.fontSize = '10px'
@@ -1746,6 +1808,7 @@ $.opensb = ({ o }) => {
   tab.style.alignItems = 'center'
   tab.style.height = '100%'
   tab.append(tbt, sb.configtab)
+  if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
   const tb = dk3.adddock(sb, tab)
   tb.setclosable(() => true)
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
@@ -1840,10 +1903,10 @@ $.globalsave = save
   window.$ = $
   $.vcs = vcseditor()
   listenframe(() => vcs.frame())
-  $.sc = splitctn()
+  document.body.append(docksys)
+  $.root = docksys.root
   $.dk = docking()
-  sc.additem(dk)
-  document.body.append(sc)
+  root.additem(dk)
   dk.adddock(vcs.elm, 'vcs')
   $.dk2 = false, $.dk3 = false
   vcs.on('boot text editor', opente)
