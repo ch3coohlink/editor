@@ -419,7 +419,7 @@
         arr.splice(i, 1, b), update()
       }
       $.delitem = (e, i = getindex(e)) => {
-        if (i >= 0) { arr.splice(i, 1), e?.remove(), update() }
+        if (i >= 0) { arr.splice(i, 1), e.remove?.(), update() }
         else return; if (size === 0) { del() }
       }
       on('resize', layout)
