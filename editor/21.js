@@ -933,7 +933,7 @@
         return { x, y }
       }
       $.elm = svg('svg'); elm.style.display = 'block'
-      elm.style.fontFamily = 'helvetica-bold'
+      elm.style.fontFamily = 'helvetica-bold, helvetica'
       elm.style.fontWeight = 'bolder'
       elm.style.userSelect = elm.style.touchAction = 'none'
       elm.style.height = elm.style.width = '100%'
