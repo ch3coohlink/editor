@@ -292,7 +292,10 @@
       Object.defineProperty($, 'direction', {
         set: v => {
           df = v === 'vertical'; let c = dcstr()
-          for (const e of dragbars) { e.style.cursor = c } layout()
+          for (const e of dragbars) {
+            e.style.cursor = c
+            e.reset()
+          } layout()
         }, get: () => df ? 'vertical' : 'horizontal',
       })
       Object.defineProperty($, 'size', { get: () => arr.length })
@@ -303,13 +306,14 @@
           ? r.height : r.width) - (l - 1) * dragbarsize
         const op = df ? 1 : 0
         let sum = 0; arr.forEach(e => sum += e.sizebase[op])
-        let xory = 0; for (let i = 0; i < l; i++) {
+        let xory = df ? rect.top : rect.left
+        for (let i = 0; i < l; i++) {
           const elm = arr[i], bar = dragbars[i]
           let childrect; if (df) {
             childrect = {
               top: xory, left: r.left, width: r.width,
-              height: xory += size * elm.sizebase[op] / sum,
-            }; if (bar) {
+              height: size * elm.sizebase[op] / sum,
+            }; xory += childrect.height; if (bar) {
               bar.style.top = xory + 'px'
               bar.style.left = r.left + 'px'
               bar.style.width = r.width + 'px'
@@ -318,8 +322,8 @@
           } else {
             childrect = {
               top: r.top, left: xory, height: r.height,
-              width: xory += size * elm.sizebase[op] / sum,
-            }; if (bar) {
+              width: size * elm.sizebase[op] / sum,
+            }; xory += childrect.width; if (bar) {
               bar.style.left = xory + 'px'
               bar.style.top = r.top + 'px'
               bar.style.height = r.height + 'px'
@@ -338,18 +342,53 @@
         const d = dom(); {
           d.className = 'dragbar'
           d.style.position = 'absolute'
-          d.style.background = '#c9c9c9'
           d.style.userSelect = 'none'
           d.style.cursor = dcstr()
+        } const inner = dom(); d.append(inner); {
+          const reset = d.reset = () => {
+            inner.style.position = 'absolute'
+            inner.style.background = 'black'
+            if (df) {
+              inner.style.transition = 'opacity 0.1s, height 0.1s, top 0.1s'
+              inner.style.height = dragbarsize + 'px'
+              inner.style.width = '100%'
+            } else {
+              inner.style.transition = 'opacity 0.1s, width 0.1s, left 0.1s'
+              inner.style.width = dragbarsize + 'px'
+              inner.style.height = '100%'
+            }
+            inner.style.left = '0px'
+            inner.style.top = '0px'
+            inner.style.zIndex = '100'
+            inner.style.opacity = '0.2'
+            inner.style.userSelect = 'none'
+          }; reset()
+          inner.addEventListener('pointerenter', () => {
+            inner.style.opacity = '0.3'
+            if (df) {
+              inner.style.height = '20px'
+              inner.style.top = dragbarsize / 2 - 10 + 'px'
+            } else {
+              inner.style.width = '20px'
+              inner.style.left = dragbarsize / 2 - 10 + 'px'
+            }
+          })
+          inner.addEventListener('pointerleave', reset)
         }
         listenpointerdown(d, e => {
-          const a = arr.slice(0, i), b = arr.slice(i)
+          const a = arr[i], b = arr[i + 1]
+          const ab = a.getBoundingClientRect?.() ?? a.rect
+          const bb = b.getBoundingClientRect?.() ?? b.rect
           const r = $.rect, op = df ? 1 : 0
+          const baselen = (df ? r.height : r.width) - (arr.length - 1) * dragbarsize
+          let sum = 0; arr.map(e => sum += e.sizebase[op])
+          const ls = arr.map(e => e.sizebase[op] / sum * baselen)
           const m = e => {
-            const p = geteventlocation(e), ratio = clamp(df
-              ? (p.y - r.top) / r.height : (p.x - r.left) / r.width, 0, 1)
-            a.forEach((e, i) => e.sizebase[op] = ratio / a.length)
-            b.forEach((e, i) => e.sizebase[op] = (1 - ratio) / b.length)
+            const p = geteventlocation(e)
+            const aplusb = df ? ab.height + bb.height : ab.width + bb.width
+            ls[i] = df ? p.y - ab.top : p.x - ab.left
+            ls[i + 1] = df ? (bb.top + bb.height) - p.y : (bb.left + bb.width) - p.x
+            arr.forEach((e, i) => e.sizebase[op] = clamp(ls[i] / baselen, 0, aplusb / baselen))
             layout()
           }
           listenpointermove(m); listenpointerup(() => cancelpointermove(m))
@@ -358,27 +397,29 @@
         return d
       }, del = () => (
         dragbars.forEach(b => b.remove()),
-        splitctn.is(parentNode) ? parentNode.delitem($) : 0)
+        splitctn.is(parentctn) ? parentctn.delitem($) : 0)
       dragbar.is = n => n.classList.contains('dragbar')
       $.dragbars = []
       $.update = () => {
-        log('update')
-        let dsl = dragbars.length, d = arr.length - 1 - dsl
         for (const e of arr) {
           e.parentctn = $
-          if (!(e instanceof HTMLElement)) { return }
-          if (e.parentNode === docksys) { return }
+          if (!(e instanceof HTMLElement)) { continue }
+          if (e.parentNode === docksys) { continue }
           docksys.append(e)
         }
         dragbars.forEach(b => b.remove())
-        dragbars = arr.map((_, i) => dragbar(i + 1))
+        dragbars = arr.slice(0, -1).map((_, i) => dragbar(i))
         layout()
       }
       $.getindex = e => arr.indexOf(e)
-      $.additem = (e, i = 0) => { arr.splice(i, 0, e), update() }
-      $.rplitem = (a, b, i = arr.indexOf(a)) => { arr.splice(i, 1, b), update() }
+      $.additem = (e, i = 0) => {
+        arr.splice(i, 0, e), update()
+      }
+      $.rplitem = (a, b, i = arr.indexOf(a)) => {
+        arr.splice(i, 1, b), update()
+      }
       $.delitem = (e, i = getindex(e)) => {
-        if (i >= 0) { arr.splice(i, 1), update() }
+        if (i >= 0) { arr.splice(i, 1), e.remove(), update() }
         else return; if (size === 0) { del() }
       }
       on('resize', layout)
@@ -561,10 +602,10 @@
       $.logdk = () => {
         const a = ['ctn'], f = (e, i = 1) => {
           for (const c of e.arr ?? e.children) {
-            if (splitctn.is(c)) { a.push('|-'.repeat(i) + 'ctn') }
-            else if (c.classList?.contains('single-tab')) { a.push('|-'.repeat(i) + c.innerText) }
-            else if (c.type === 'docking') { a.push('--'.repeat(i) + 'dock') }
-            else { a.push('|-'.repeat(i) + c.className) } // a.push('|-'.repeat(i))
+            if (splitctn.is(c)) { log('|-'.repeat(i) + 'ctn ' + c.direction); log(c.rect) }
+            else if (c.classList?.contains('single-tab')) { log('|-'.repeat(i) + c.innerText) }
+            else if (c.type === 'docking') { log('--'.repeat(i) + 'dock') }
+            else { log('|-'.repeat(i) + c.className) }
             if (splitctn.is(c)) { f(c, i + 1) }
             if (c.type === 'docking') { f(c.tabs, i + 1) }
           }
@@ -573,25 +614,7 @@
         log(a.join('\n'))
       }
       const ro = new ResizeObserver(layout); ro.observe($)
-      on('layout change', () => {
-        let tree = (c, a = []) => {
-          if (!a.direction) { a.direction = c.direction }
-          for (const e of c.arr) {
-            if (splitctn.is(e)) {
-              if (e.size === 1) { tree(e, a) }
-              else if (e.direction === c.direction) { tree(e, a) }
-              else { let t = []; a.push(t); tree(e, t) }
-            } else { a.push(e) }
-          } return a
-        }
-        let build = (a, c = splitctn()) => {
-          c.arr = [], c.direction = a.direction; for (const e of a) {
-            c.arr.push(Array.isArray(e) ? build(e) : e)
-          } c.update(); return c
-        }
-        logdk()
-        // build(tree(sc), sc)
-      })
+      on('layout change', () => { })
     } return $
   })()
 } { // vcs --------------------------------------------------------------------
