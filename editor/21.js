@@ -2,6 +2,9 @@
 
 { // basic utility ------------------------------------------------------------
   $._ = undefined
+  let loggc = new FinalizationRegistry(k => log('gc: ' + k))
+  $.ongc = (o, k) => loggc.register(o, k + '-' + uuid())
+  $.debuggc = false
   $.wait = t => new Promise(r => setTimeout(r, t))
   $.debounce = (f, t = 100, i) => (...a) =>
     (clearTimeout(i), i = setTimeout(() => f(...a), t))
@@ -285,7 +288,7 @@
   display: none;  /* Safari and Chrome */
 }`; document.head.append(s)
 } { // docking system ----------------------------------------------------------
-  $.splitctn = (parentctn, $ = eventnode({})) => {
+  $.splitctn = (parentctn, $ = {}) => {
     $.parentctn = parentctn; with ($) {
       $.arr = []; let df = false
       Object.defineProperty($, 'direction', {
@@ -299,7 +302,8 @@
       })
       Object.defineProperty($, 'size', { get: () => arr.length })
       const dcstr = () => (df ? 'ns' : 'ew') + '-resize'
-      const dragbarsize = 2, layout = r => {
+      const dragbarsize = 2
+      $.layout = (r, recur = true) => {
         if (!r) { r = $.rect ?? parentctn.requestrect($) }
         $.rect = r; const l = arr.length, size = (df
           ? r.height : r.width) - (l - 1) * dragbarsize
@@ -331,11 +335,11 @@
           for (const k in childrect) { styles[k] = childrect[k] + 'px' }
           if (elm.style) { Object.assign(elm.style, styles) }
           elm.rect = childrect
-          elm.emit?.('resize', childrect)
+          if (recur) { elm.layout?.(childrect) }
           xory += dragbarsize
         }
       }
-      $.requestrect = $ => (layout(), $.rect)
+      $.requestrect = $ => (layout(_, false), $.rect)
       const dragbar = i => {
         const d = dom(); {
           d.className = 'dragbar'
@@ -421,8 +425,8 @@
         if (i >= 0) { arr.splice(i, 1), e.remove?.(), update() }
         else return; if (size === 0) { del() }
       }
-      on('resize', layout)
       $.type = 'split-container'
+      debuggc ? ongc($, 'split container') : 0
     } return $
   }; splitctn.is = n => n.type === 'split-container'
   $.docking = ($ = dom()) => {
@@ -588,13 +592,14 @@
         .length - 1])) => e ? focustab(e) : parentctn.delitem($)
       $.makecontain = (p = splitctn(parentctn)) => (
         parentctn.rplitem($, p), p.additem($), p)
+      debuggc ? ongc($, 'docker') : 0
     } return $
   }
   $.docksys = (($ = eventnode(dom())) => {
     with ($) {
       style.position = 'relative'
       style.height = style.width = '100%'
-      $.layout = () => { root.emit('resize', $.getBoundingClientRect()) }
+      $.layout = () => root.layout($.getBoundingClientRect())
       $.root = splitctn($)
       $.requestrect = () => $.getBoundingClientRect()
       $.logdk = () => {
@@ -1525,11 +1530,12 @@
         { get: () => editor.getValue(), set: v => editor.setValue(v) })
       $.open = () => { parent.style.display = "" }
       $.close = () => { parent.style.display = "none" }
+      $.dispose = () => editor.dispose()
     } return $
   }
   $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
     $.vcs = vcs; $.target = target; with ($) {
-      { // tab bar and basic stylegt
+      { // tab bar and basic style
         $.configtab = eventnode(dom())
         configtab.style.margin = '0px 5px'
         configtab.style.display = 'flex'
@@ -1583,8 +1589,9 @@
       } $.append(domdiv, clidiv)
 
       let vcsenventregisted = false, filechange
-      const _fchd = ({ o }) => filechange?.(o)
-      $.registerVCSevent = () => vcs.onweak('file change', _fchd)
+      $._fchd = ({ o }) => { log('reload'); filechange?.(o) }
+      $.registerVCSevent = () => vcs.on('file change', _fchd)
+      $.unregisterVCSevent = () => vcs.off('file change', _fchd)
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
@@ -1683,7 +1690,6 @@
         }
 
         const watch = new Set()
-        if (!vcsenventregisted) { registerVCSevent() }
         const reload = debounce(() => $.exec(), 0)
         filechange = o => watch.has(o.id) ? reload() : 0
 
@@ -1708,7 +1714,8 @@
           const r = [rp.version.id, rp.join('/'), text]; r.id = id; return r
         }, loadtext = (...a) => load(...a, true)
 
-        env.__readfile = (v, b, fst) => (p, opt) => loadtext(v, solvepath(b, p), fst, opt)
+        env.__readfile = (v, b, fst) => (p, opt) =>
+          (opt?.raw ? load : loadtext)(v, solvepath(b, p), fst, opt)
         env.__writefile = (v, b, fst) => (p, t, force = false) => {
           p = solvepath(b, p); const a = p.split('/').filter(v => v)
           try { vcs.write(virtuallink(v, a, fst), a, ['file', t, force]) }
@@ -1739,6 +1746,11 @@
         try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
       }
+
+      $.setwatchindom = () => (
+        registerVCSevent(), setTimeout(watchindom, 1000))
+      const watchindom = () => document.body.contains($)
+        ? setwatchindom() : (unregisterVCSevent(), clear()); setwatchindom()
     } return $
   }
   $.cfeditor = ($ = eventnode(dom())) => {
@@ -1809,10 +1821,16 @@ $.opente = ({ o }) => {
   te.change_language(extname[ext] ?? 'plain text')
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
-  tb.setclosable((b = cgd) => (
-    b ? askclose() : vcs.off('version lock change', sro), !b))
+  tb.setclosable((b = cgd) => {
+    if (b) { askclose() }
+    else {
+      te.dispose()
+      vcs.off('version lock change', sro)
+    } return !b
+  })
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f()
+  debuggc ? ongc(te, 'texteditor') : 0
   return te
 }
 $.opence = ({ o }) => {
@@ -1831,9 +1849,10 @@ $.opensb = ({ o }) => {
   tab.append(tbt, sb.configtab)
   if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
   const tb = dk3.adddock(sb, tab)
-  tb.setclosable(() => true)
+  tb.setclosable(() => (sb.clear(), true))
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
+  debuggc ? ongc(sb, 'sandbox') : 0
   return sb
 }
 
@@ -1942,5 +1961,4 @@ $.globalsave = save
     wt(dk2)
   }
   await load()
-  log(vcs.g)
 }

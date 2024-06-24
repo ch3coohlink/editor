@@ -1,0 +1,1 @@
+{"id":"cd6d1b23062c533cf54e2eced6eeafa91464d0a4af7a8120233154f40511c14b","to":[],"value":"// 这个文件用于调查monaco editor的内存泄露\r\n\r\nconst newme = () => {\r\n  const te = $$.texteditor()\r\n  te.style.height = '100px'\r\n  root.append(te)\r\n  setTimeout(() => {\r\n    te.dispose()\r\n    te.remove()\r\n  })\r\n}\r\nsetInterval(newme, 10)\r\n\r\n// 只能说，漏的一塌糊涂"}
