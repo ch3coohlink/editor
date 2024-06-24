@@ -287,7 +287,6 @@
 } { // docking system ----------------------------------------------------------
   $.splitctn = (parentctn, $ = eventnode({})) => {
     $.parentctn = parentctn; with ($) {
-      $.sizebase = [1, 1]
       $.arr = []; let df = false
       Object.defineProperty($, 'direction', {
         set: v => {
@@ -304,15 +303,14 @@
         if (!r) { r = $.rect ?? parentctn.requestrect($) }
         $.rect = r; const l = arr.length, size = (df
           ? r.height : r.width) - (l - 1) * dragbarsize
-        const op = df ? 1 : 0
-        let sum = 0; arr.forEach(e => sum += e.sizebase[op])
+        let sum = 0; arr.forEach(e => sum += e.sizebase)
         let xory = df ? rect.top : rect.left
         for (let i = 0; i < l; i++) {
           const elm = arr[i], bar = dragbars[i]
           let childrect; if (df) {
             childrect = {
               top: xory, left: r.left, width: r.width,
-              height: size * elm.sizebase[op] / sum,
+              height: size * elm.sizebase / sum,
             }; xory += childrect.height; if (bar) {
               bar.style.top = xory + 'px'
               bar.style.left = r.left + 'px'
@@ -322,7 +320,7 @@
           } else {
             childrect = {
               top: r.top, left: xory, height: r.height,
-              width: size * elm.sizebase[op] / sum,
+              width: size * elm.sizebase / sum,
             }; xory += childrect.width; if (bar) {
               bar.style.left = xory + 'px'
               bar.style.top = r.top + 'px'
@@ -376,19 +374,18 @@
           inner.addEventListener('pointerleave', reset)
         }
         listenpointerdown(d, e => {
-          const a = arr[i], b = arr[i + 1]
+          const a = arr[i], b = arr[i + 1], r = $.rect
           const ab = a.getBoundingClientRect?.() ?? a.rect
           const bb = b.getBoundingClientRect?.() ?? b.rect
-          const r = $.rect, op = df ? 1 : 0
           const baselen = (df ? r.height : r.width) - (arr.length - 1) * dragbarsize
-          let sum = 0; arr.map(e => sum += e.sizebase[op])
-          const ls = arr.map(e => e.sizebase[op] / sum * baselen)
+          let sum = 0; arr.map(e => sum += e.sizebase)
+          const ls = arr.map(e => e.sizebase / sum * baselen)
           const m = e => {
             const p = geteventlocation(e)
             const aplusb = df ? ab.height + bb.height : ab.width + bb.width
             ls[i] = df ? p.y - ab.top : p.x - ab.left
             ls[i + 1] = df ? (bb.top + bb.height) - p.y : (bb.left + bb.width) - p.x
-            arr.forEach((e, i) => e.sizebase[op] = clamp(ls[i] / baselen, 0, aplusb / baselen))
+            arr.forEach((e, i) => e.sizebase = clamp(ls[i] / baselen, 0, aplusb / baselen))
             layout()
           }
           listenpointermove(m); listenpointerup(() => cancelpointermove(m))
@@ -413,9 +410,11 @@
       }
       $.getindex = e => arr.indexOf(e)
       $.additem = (e, i = 0) => {
+        e.sizebase = 1 / Math.max(arr.length, 1)
         arr.splice(i, 0, e), update()
       }
       $.rplitem = (a, b, i = arr.indexOf(a)) => {
+        b.sizebase = 1 / Math.max(arr.length - 1, 1)
         arr.splice(i, 1, b), update()
       }
       $.delitem = (e, i = getindex(e)) => {
@@ -429,7 +428,6 @@
   $.docking = ($ = dom()) => {
     with ($) {
       { // style ----------------------------------------------------------------
-        $.sizebase = [1, 1]
         className = $.type = 'docking'
         style.position = 'absolute'
         style.display = 'flex'
