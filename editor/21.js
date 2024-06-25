@@ -1507,7 +1507,7 @@
       root.append(div, css)
       className = 'texteditor'
 
-      $.wordWrap = "on"
+      $.wordWrap = "off"
       const disposable = []
       disposable.push(
         $.editor = monaco.editor.create(div, {
@@ -1630,10 +1630,6 @@
         requestAnimationFrame cancelAnimationFrame,
         setTimeout clearTimeout, setInterval clearInterval`.split(",")
         .map(s => s.split(/\s+/).filter(v => v))
-      const deconstructors = {
-        AudioContext: v => v.close(),
-        Worker: v => v.terminate(),
-      }, callbacks = {}, packedinstances = {}
       const gen_timeout = (o = {}) => {
         for (const [s, c] of timeout_functions) {
           const sf = window[s], cf = window[c]
@@ -1643,23 +1639,27 @@
           } : (f, t) => { const i = sf(f, t); cbs.add(i); return i }
           o[c] = i => (cbs.delete(i), cf(i))
         } return o
-      }, timeoutfunctions = gen_timeout()
+      }, callbacks = {}, timeoutfunctions = gen_timeout()
       gen_timeout.clear = () => {
         for (const k in callbacks) {
           const cbs = callbacks[k], cf = callbacks[k].cf
           for (const v of cbs) { cf(v) } cbs.clear()
         }
       }
+      const deconstructors = {
+        AudioContext: v => v.close(),
+        Worker: v => v.terminate(),
+      }, packedinstances = {}
       const pack_constructor = (o = {}) => {
         for (const k in deconstructors) {
           const f = window[k], a = packedinstances[k] = []; o[k] = function (...v
-          ) { const r = new WeakRef(new f(...v)); a.push(r); return r }
+          ) { const r = new f(...v); a.push(r); return r }
         } return o
       }, constructorpacker = pack_constructor()
       pack_constructor.clear = () => {
         for (const k in packedinstances) {
           const f = deconstructors[k], a = packedinstances[k]
-          a.forEach(r => (r = r.deref(), r ? f(r) : 0)); a.splice(0, a.length)
+          a.forEach(r => (r ? f(r) : 0)); a.splice(0, a.length)
         }
       }
 
@@ -1747,14 +1747,17 @@
           if (textonly) { return text } const rp = vcs.getpath(o) // real path
           const r = [rp.version.id, rp.join('/'), text]; r.id = id; return r
         }, loadtext = (...a) => load(...a, true)
-
-        env.__readfile = (v, b, fst) => (p, opt) =>
-          (opt?.raw ? load : loadtext)(v, solvepath(b, p), fst, opt)
-        env.__writefile = (v, b, fst) => (p, t, force = false) => {
+        const write = async (v, b, fst, p, t, force = false) => {
           p = solvepath(b, p); const a = p.split('/').filter(v => v)
           try { vcs.write(virtuallink(v, a, fst), a, ['file', t, force]) }
           catch { throw WRONGPATH(p) }
         }
+
+        env.__readfile = (v, b, fst) => (p, opt) =>
+          (opt?.raw ? load : loadtext)(v, solvepath(b, p), fst, opt)
+        env.__writefile = (v, b, fst) => (p, t, force) =>
+          write(v, solvepath(b, p), t, fst, force)
+
         env.__require = (v, b, fst) => async (ph, p = solvepath(b, ph)) => {
           const data = await load(v, p, fst, { watch: true }), file = data.id
           if (loaded.has(file)) { return loaded.get(file) }
@@ -1777,6 +1780,7 @@
         if (links) { env.__links = links } // log(filepath, content, rootver, links, replaces)
         if (!replaces) { replaces = new Map }
 
+        env.__sandbox__ = { load, write }
         try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
       }
