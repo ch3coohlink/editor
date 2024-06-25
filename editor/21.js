@@ -525,6 +525,7 @@
         if (r.cp() === $ && size === 1) { return }
         split(r, calsplit(e))
       })
+      $.addEventListener('pointerdown', () => docksys.lastactive = $)
       $.move = e => { tabs.append(e), focustab(e) }
       $.focuson = e => (ctn.innerHTML = '', ctn.append(e))
       $.focustab = te => {
@@ -620,6 +621,18 @@
         }
         f(root)
         log(a.join('\n'))
+      }
+      $.lastactive = false
+      $.additem = (e, d) => {
+        if (!lastactive ||
+          !document.body.contains(lastactive)) {
+          let o = root.arr[0]
+          while (splitctn.is(o)) {
+            o = o.arr[0]
+          } lastactive = o
+        }
+        const dk = lastactive.split(e, d)
+        dk.additem()
       }
       // TODO: additem to last active docker
       const ro = new ResizeObserver(layout); ro.observe($)
