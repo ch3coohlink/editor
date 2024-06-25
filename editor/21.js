@@ -3,9 +3,9 @@
 { // basic utility ------------------------------------------------------------
   $._ = undefined
   let loggc = new FinalizationRegistry(k => log('gc: ' + k))
-  $.debuggc = true
-  $.ongc = (o, k, id = uuid()) => {
-    if (!debuggc) { return }
+  $.debuggc = false
+  $.ongc = (o, k, force = false, id = uuid()) => {
+    if (!debuggc && !force) { return }
     loggc.register(o, k + '-' + id)
     log('allocate: ' + k + '-' + id)
   }
@@ -621,6 +621,7 @@
         f(root)
         log(a.join('\n'))
       }
+      // TODO: additem to last active docker
       const ro = new ResizeObserver(layout); ro.observe($)
       on('layout change', () => { })
     } return $
@@ -1545,7 +1546,7 @@
         rszob.disconnect(); $.clearevent(), $.remove()
         $.value = $.innerHTML = ''
         disposable.forEach(v => v.dispose())
-      }
+      }; ongc($, 'texteditor')
     } return $
   }
   $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
@@ -1771,7 +1772,7 @@
       $.dispose = () => {
         vcs.off('file change', _fchd)
         unregistersandboxclear(); clear()
-      }
+      }; ongc($, 'sandbox')
     } return $
   }
   sandboxtab.registerclear = $ => {
@@ -1857,7 +1858,6 @@ $.opente = ({ o }) => {
   })
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f()
-  ongc(te, 'texteditor')
   return te
 }
 $.opence = ({ o }) => {
@@ -1879,7 +1879,6 @@ $.opensb = ({ o }) => {
   tb.setclosable(() => (sb.dispose(), true))
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
-  ongc(sb, 'sandbox')
   return sb
 }
 
@@ -1988,4 +1987,10 @@ $.globalsave = save
     wt(dk2)
   }
   await load()
+}
+
+{
+  const a = docking()
+  document.body.append(a)
+  a.remove()
 }
