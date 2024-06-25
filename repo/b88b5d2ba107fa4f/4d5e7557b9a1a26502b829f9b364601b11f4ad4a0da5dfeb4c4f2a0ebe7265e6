@@ -1,1 +1,0 @@
-{"id":"4d5e7557b9a1a26502b829f9b364601b11f4ad4a0da5dfeb4c4f2a0ebe7265e6","to":[],"value":"setInterval(() => {\r\n  log('hello worker')\r\n}, 1000)"}
