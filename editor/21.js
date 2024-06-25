@@ -3,8 +3,12 @@
 { // basic utility ------------------------------------------------------------
   $._ = undefined
   let loggc = new FinalizationRegistry(k => log('gc: ' + k))
-  $.ongc = (o, k) => loggc.register(o, k + '-' + uuid())
-  $.debuggc = false
+  $.debuggc = true
+  $.ongc = (o, k, id = uuid()) => {
+    if (!debuggc) { return }
+    loggc.register(o, k + '-' + id)
+    log('allocate: ' + k + '-' + id)
+  }
   $.wait = t => new Promise(r => setTimeout(r, t))
   $.debounce = (f, t = 100, i) => (...a) =>
     (clearTimeout(i), i = setTimeout(() => f(...a), t))
@@ -30,9 +34,9 @@
     for (const e of n) { f.appendChild(e) }
     p.insertBefore(f, d[s]); return rm
   }
-  const es = Symbol('eventid'); $.eventnode = ($ = {}) => {
+  $.eventnode = ($ = {}) => {
     $._handles = {}; with ($) {
-      let i = 0, giveid = (f, id = i++) => typeof f[es] === 'number' ? f[es] : f[es] = id
+      let i = 0
       $.emit = (t, ...arg) => {
         const ht = _handles[t]
         if (lock > 0) { da.push((arg.unshift(t), arg)) } else if (ht) {
@@ -41,16 +45,17 @@
           } for (const i of b) { ht.delete(i) }
           for (const f of a) { f(...arg) }
         }
-      }; $.on = (t, f) => (_handles[t] ??= new Map).set(giveid(f), f)
-      $.onweak = (t, f) => (_handles[t] ??= new Map).set(giveid(f), new WeakRef(f))
+      }; $.on = (t, f) => ((_handles[t] ??= new Map).set(i, f), i++)
+      $.onweak = (t, f) => ((_handles[t] ??= new Map).set(i, new WeakRef(f)), i++)
       let da = [], lock = 0
       $.setdelay = (locklevel = 1) => { lock = Math.max(locklevel, lock) }
       $.enddelay = (unlocklevel = 1) => {
         if (unlocklevel < lock) { return }
         lock = 0; for (const a of da) { emit(...a) } da = []
       }
-      $.off = (t, f) => (_handles[t]?.delete(f[es]),
-        _handles[t].size > 0 ? 0 : delete _handles[t])
+      $.off = (t, id) => _handles[t] ? (_handles[t].delete(id),
+        _handles[t].size > 0 ? 0 : delete _handles[t]) : 0
+      $.clearevent = () => _handles = {}
     } return $
   }
   $.bsearch = (a, cmp, l = 0, r = a.length - 1, m, c) => {
@@ -426,7 +431,7 @@
         else return; if (size === 0) { del() }
       }
       $.type = 'split-container'
-      debuggc ? ongc($, 'split container') : 0
+      ongc($, 'split container')
     } return $
   }; splitctn.is = n => n.type === 'split-container'
   $.docking = ($ = dom()) => {
@@ -592,7 +597,7 @@
         .length - 1])) => e ? focustab(e) : parentctn.delitem($)
       $.makecontain = (p = splitctn(parentctn)) => (
         parentctn.rplitem($, p), p.additem($), p)
-      debuggc ? ongc($, 'docker') : 0
+      ongc($, 'docker')
     } return $
   }
   $.docksys = (($ = eventnode(dom())) => {
@@ -1340,8 +1345,8 @@
         $.namingdialog = dialogprocess(async pv => {
           let r, j, acc = () => r(i.value)
           const p = new Promise((...a) => [r, j] = a)
-            .finally(() => off('leave dialog', f))
-          const f = () => j(userend); on('leave dialog', f)
+            .finally(() => off('leave dialog', fid))
+          const fid = on('leave dialog', () => j(userend))
           const d = dom()
           d.style.background = 'white'
           d.style.borderRadius = '10px'
@@ -1386,8 +1391,8 @@
           let r, j, p = new Promise((...a) => [r, j] = a)
             .finally(() => (elm.style.background = '',
               dialogdv.style.background = bk,
-              off('leave dialog', f)))
-          const f = () => j(userend); on('leave dialog', f)
+              off('leave dialog', fid)))
+          const fid = on('leave dialog', () => j(userend))
           const d = dom(), t = dom('span')
           const yb = btn('Yes'), nb = btn('No')
           d.style.pointerEvents = 'initial'
@@ -1489,48 +1494,58 @@
       className = 'texteditor'
 
       $.wordWrap = "on"
-      $.editor = monaco.editor.create(div, {
-        value: "",
-        language: "plaintext",
-        theme: "vs-light",
-        renderWhitespace: "all",
-        renderControlCharacters: true,
-        lightbulb: { enabled: false },
-        tabSize: 2,
-        cursorBlinking: "smooth",
-        cursorSmoothCaretAnimation: "on",
-        smoothScrolling: true,
-        wordBasedSuggestions: 'off',
-        wordWrap,
-      })
-      editor.addAction({
-        id: "save-text-file", label: "Save File",
-        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-        run: () => emit("save", value),
-      })
-      editor.addAction({
-        id: "toggle-word-warp", label: "Toggle Word Warp",
-        keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
-        run: () => ($.wordWrap = wordWrap === "on" ? "off" : "on",
-          editor.updateOptions({ wordWrap })),
-      })
-      editor.addAction({
-        id: "format-code", label: "Format code",
-        keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.CtrlCmd | monaco.KeyCode.KeyF],
-        run: () => editor.getAction('editor.action.formatDocument').run(),
-      })
+      const disposable = []
+      disposable.push(
+        $.editor = monaco.editor.create(div, {
+          value: "",
+          language: "plaintext",
+          theme: "vs-light",
+          renderWhitespace: "all",
+          renderControlCharacters: true,
+          lightbulb: { enabled: false },
+          tabSize: 2,
+          cursorBlinking: "smooth",
+          cursorSmoothCaretAnimation: "on",
+          smoothScrolling: true,
+          wordBasedSuggestions: 'off',
+          wordWrap,
+        }),
+        editor.addAction({
+          id: "save-text-file", label: "Save File",
+          keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+          run: () => emit("save", value),
+        }),
+        editor.addAction({
+          id: "toggle-word-warp", label: "Toggle Word Warp",
+          keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.KeyZ],
+          run: () => ($.wordWrap = wordWrap === "on" ? "off" : "on",
+            editor.updateOptions({ wordWrap })),
+        }),
+        editor.addAction({
+          id: "format-code", label: "Format code",
+          keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.CtrlCmd | monaco.KeyCode.KeyF],
+          run: () => editor.getAction('editor.action.formatDocument').run(),
+        }),
+      )
       $.setreadonly = (readOnly = true) => editor.updateOptions({ readOnly })
 
       $.change_language = l =>
         monaco.editor.setModelLanguage(editor.getModel(), l)
-      new ResizeObserver(() => editor.layout()).observe(div)
+      const rszob = new ResizeObserver(() => editor.layout())
+      rszob.observe(div)
       editor.onDidChangeModelContent(e => emit("change", e))
       editor.trigger('editor', 'hideSuggestWidget', [])
       Object.defineProperty($, "value",
         { get: () => editor.getValue(), set: v => editor.setValue(v) })
       $.open = () => { parent.style.display = "" }
       $.close = () => { parent.style.display = "none" }
-      $.dispose = () => editor.dispose()
+      sandboxtab.registerclear($)
+      $.dispose = () => {
+        unregistersandboxclear()
+        rszob.disconnect(); $.clearevent(), $.remove()
+        $.value = $.innerHTML = ''
+        disposable.forEach(v => v.dispose())
+      }
     } return $
   }
   $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
@@ -1588,10 +1603,8 @@
         togglecli()
       } $.append(domdiv, clidiv)
 
-      let vcsenventregisted = false, filechange
-      $._fchd = ({ o }) => { log('reload'); filechange?.(o) }
-      $.registerVCSevent = () => vcs.on('file change', _fchd)
-      $.unregisterVCSevent = () => vcs.off('file change', _fchd)
+      let filechange, _fchd; $.registerVCSevent = () =>
+        _fchd = vcs.on('file change', ({ o }) => filechange?.(o))
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
@@ -1636,24 +1649,31 @@
         }
       }
 
+      $.env = false
       $.clear = () => {
         domdiv.innerHTML = ''
         clictn.innerHTML = ''
         gen_timeout.clear()
         pack_constructor.clear()
+        if (env) {
+          env.emit('sandboxclear')
+          env.clearevent()
+          env = false
+        }
       }
 
       $.exec = async () => {
         // TODO: read a config file
 
         clear()
+        if (_fchd === undefined) { registerVCSevent() }
 
         const domctn = dom(); domdiv.append(domctn)
         const shadowroot = domctn.attachShadow({ mode: 'open' })
         const root = dom(); shadowroot.append(root)
         domctn.style.height = root.style.height = '100%'
         root.style.overflow = 'auto'
-        const env = { root, ...timeoutfunctions, ...constructorpacker }
+        $.env = eventnode({ root, ...timeoutfunctions, ...constructorpacker })
         env.$$ = window.$
 
         let logd, nolog = false, _error = (nodup, ...a) => (
@@ -1740,18 +1760,26 @@
         let path; if (!isv) { path = vcs.getpath(target); watch.add(target.id) }
         let [filepath, content, rootver, links, replaces] = isv ? target.getfile()
           : [path.join('/'), vcs.g[target.value].value, path.version.id]
-        if (links) { env.__links = links } // log(filepath, content, rootver, links)
+        if (links) { env.__links = links } // log(filepath, content, rootver, links, replaces)
         if (!replaces) { replaces = new Map }
 
         try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
       }
 
-      $.setwatchindom = () => (
-        registerVCSevent(), setTimeout(watchindom, 1000))
-      const watchindom = () => document.body.contains($)
-        ? setwatchindom() : (unregisterVCSevent(), clear()); setwatchindom()
+      sandboxtab.registerclear($)
+      $.dispose = () => {
+        vcs.off('file change', _fchd)
+        unregistersandboxclear(); clear()
+      }
     } return $
+  }
+  sandboxtab.registerclear = $ => {
+    let _rgsq; $.registersandboxclear = e => {
+      if (!_rgsq) { _rgsq = [e, e.on('sandboxclear', () => $.dispose())] }
+    }; $.unregistersandboxclear = () => {
+      if (_rgsq) { _rgsq[0].off('sandboxclear', _rgsq[1]) }
+    }; return $
   }
   $.cfeditor = ($ = eventnode(dom())) => {
     with ($) {
@@ -1805,8 +1833,8 @@ $.opente = ({ o }) => {
   const te = texteditor(), v = vcs.getversion(o)
   te.value = vcs.g[o.value].value
   if (v.lock) { te.setreadonly() }
-  const sro = ({ o }) => (te.setreadonly(o.lock), tb.textContent = caln())
-  vcs.on('version lock change', sro)
+  const sro = vcs.on('version lock change',
+    ({ o }) => (te.setreadonly(o.lock), tb.textContent = caln()))
   te.on('change', () => { cgd = true, tb.textContent = caln() })
   te.on('save', () => (vcs.savefile(o, te.value),
     save(), cgd = false, tb.textContent = caln()))
@@ -1822,15 +1850,14 @@ $.opente = ({ o }) => {
   if (!dk2.parentNode) { createdk(_, v => dk2 = v) }
   const tb = dk2.adddock(te, n)
   tb.setclosable((b = cgd) => {
-    if (b) { askclose() }
-    else {
-      te.dispose()
+    if (b) { askclose() } else {
+      te.dispose(); tb.clearevent()
       vcs.off('version lock change', sro)
     } return !b
   })
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f()
-  debuggc ? ongc(te, 'texteditor') : 0
+  ongc(te, 'texteditor')
   return te
 }
 $.opence = ({ o }) => {
@@ -1849,10 +1876,10 @@ $.opensb = ({ o }) => {
   tab.append(tbt, sb.configtab)
   if (!dk3.parentNode) { createdk('bottom', v => dk3 = v) }
   const tb = dk3.adddock(sb, tab)
-  tb.setclosable(() => (sb.clear(), true))
+  tb.setclosable(() => (sb.dispose(), true))
   const f = () => vcs.vg.highlight(vcs.tovnode(o))
   tb.on('focus', f); f(); sb.exec()
-  debuggc ? ongc(sb, 'sandbox') : 0
+  ongc(sb, 'sandbox')
   return sb
 }
 
