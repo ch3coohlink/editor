@@ -1,0 +1,1 @@
+{"id":"61209e97c02c3d4af6c9a4eb590242f6beaed788a15dae2914045bdad446dc83","to":[],"value":"Object.assign($, await require('../util/loadworker.js'))\r\n\r\nloadworker('worker/webgpu1.js', readfile)"}

@@ -1297,7 +1297,7 @@
           vg.deltree(vo.id, 1)
         } else {
           const recursive = vo => {
-            const o = tornode(vo); c = o.children
+            const o = tornode(vo), c = o.children
             const i = vo.elm.foldidentifer = svg('path')
             i.style.pointerEvents = 'none'
             const w = vg.circlesize / 7 * 3
@@ -1747,8 +1747,8 @@
           if (textonly) { return text } const rp = vcs.getpath(o) // real path
           const r = [rp.version.id, rp.join('/'), text]; r.id = id; return r
         }, loadtext = (...a) => load(...a, true)
-        const write = async (v, b, fst, p, t, force = false) => {
-          p = solvepath(b, p); const a = p.split('/').filter(v => v)
+        const write = async (v, p, t, fst, force = false) => {
+          const a = p.split('/').filter(v => v)
           try { vcs.write(virtuallink(v, a, fst), a, ['file', t, force]) }
           catch { throw WRONGPATH(p) }
         }
