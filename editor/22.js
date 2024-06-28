@@ -1975,7 +1975,8 @@ const connectdevserver = () => {
   let r; ws.onopen = () => r(ws); ws.onmessage = e => {
     const o = JSON.parse(e.data)
     if (!o || typeof o !== 'object') { return }
-    const id = o.id, [r, j] = response.get(id); delete o.id
+    if (!o.id || !response.has(o.id)) { return }
+    const [r, j] = response.get(o.id); delete o.id
     o.error ? j(Error(o.error)) : r(o)
   }
   ws.loadlist = async repo => {

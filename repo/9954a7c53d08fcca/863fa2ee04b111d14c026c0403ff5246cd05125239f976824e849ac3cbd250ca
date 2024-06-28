@@ -1,0 +1,1 @@
+{"id":"863fa2ee04b111d14c026c0403ff5246cd05125239f976824e849ac3cbd250ca","to":[],"value":"Object.assign($, await require('util/doceditor.js'))\r\nObject.assign($, await require('util/loadworker.js'))\r\n\r\n$.bootdoc = p => doceditor(p)\r\n$.boottest = p => loadworker(p)"}
