@@ -1,0 +1,1 @@
+{"id":"b58cb848078eab8b5ed554b11f904a418385ad079b59e09544d03a2bfcd054b6","to":[],"value":"setInterval(() => {\r\n  const s = performance.now()\r\n  for (let i = 0; i < 10000000000; i++) { }\r\n  console.log(performance.now() - s)\r\n}, 2000)"}
