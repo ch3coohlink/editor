@@ -1924,6 +1924,7 @@ const localsave = async dir => {
   const hs = d.hashobj; delete d.hashobj; await Promise.all(hs
     .map(h => (ha.push(h.id), ho.has(h.id) ? 0 : ws.write(h.id, h, r)))
     .concat(ws.write('graph.json', d, r), ws.write('hashlist.json', ha, r)))
+  ws.close()
 }, httpload = async repo => {
   const rs = `repo/${repo}/`, fs = 'graph.json hashlist.json'.split(' ')
   const read = async p => (await fetch(rs + p)).text()
