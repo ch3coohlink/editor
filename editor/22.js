@@ -1664,6 +1664,11 @@
         }
       }
 
+      const eventnames = 'cancel down up enter leave move out over rawupdate'
+        .split(' ').map(n => 'pointer' + n)
+      const ehandle = eventnames.map(n => e => env.emit?.(n, e))
+      eventnames.forEach((n, i) => window.addEventListener(n, ehandle[i]))
+
       $.env = false
       $.clear = () => {
         domdiv.innerHTML = ''
@@ -1794,6 +1799,7 @@
       sandboxtab.registerclear($)
       $.dispose = () => {
         vcs.off('file change', _fchd)
+        eventnames.forEach((n, i) => window.removeEventListener(n, ehandle[i]))
         unregistersandboxclear(); clear()
       }; ongc($, 'sandbox')
     } return $
