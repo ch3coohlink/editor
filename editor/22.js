@@ -1563,6 +1563,11 @@
       }; ongc($, 'texteditor')
     } return $
   }
+  const eventnames = 'cancel down up enter leave move out over rawupdate'
+    .split(' ').map(n => 'pointer' + n)
+  const globaleventnode = eventnode()
+  const ehandle = eventnames.map(n => e => globaleventnode.emit(n, e))
+  eventnames.forEach((n, i) => window.addEventListener(n, ehandle[i]))
   $.sandboxtab = (vcs, target, $ = eventnode(dom())) => {
     $.vcs = vcs; $.target = target; with ($) {
       { // tab bar and basic style
@@ -1664,10 +1669,8 @@
         }
       }
 
-      const eventnames = 'cancel down up enter leave move out over rawupdate'
-        .split(' ').map(n => 'pointer' + n)
-      const ehandle = eventnames.map(n => e => env.emit?.(n, e))
-      eventnames.forEach((n, i) => window.addEventListener(n, ehandle[i]))
+      const ehandles = eventnames.map((n, i) =>
+        globaleventnode.on(n, e => env.emit?.(n, e)))
 
       $.env = false
       $.clear = () => {
@@ -1799,7 +1802,7 @@
       sandboxtab.registerclear($)
       $.dispose = () => {
         vcs.off('file change', _fchd)
-        eventnames.forEach((n, i) => window.removeEventListener(n, ehandle[i]))
+        ehandles.forEach((h, i) => globaleventnode.off(eventnames[i], h))
         unregistersandboxclear(); clear()
       }; ongc($, 'sandbox')
     } return $
