@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "isomorphic-git": "^1.27.1",
     "ws": "^8.14.2"
   },
   "devDependencies": {
