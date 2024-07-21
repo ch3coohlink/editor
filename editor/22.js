@@ -1575,7 +1575,7 @@
         configtab.style.margin = '0px 5px'
         configtab.style.display = 'flex'
         configtab.style.cursor = 'initial'
-        const bs = '▶️ ⏹️ 🧾'.split(' ').map(b => {
+        const bs = '▶️ ⏹️ 🧾 ⛶'.split(' ').map(b => {
           b = btn(b, 'none'), b.style.padding = '0'
           b.style.height = b.style.width = '20px'
           b.style.fontSize = '10px'; return b
@@ -1583,6 +1583,7 @@
         bs[0].onclick = () => exec()
         bs[1].onclick = () => clear()
         bs[2].onclick = () => togglecli()
+        bs[3].onclick = e => domdiv.requestFullscreen()
         configtab.addEventListener('pointerdown', e => e.preventDefault())
         $.style.height = '100%'
         $.style.position = 'relative'
@@ -1604,6 +1605,7 @@
             domdiv.style.filter = ''
           }
         }, transtime = '0.1s'
+        domdiv.style.background = 'white'
         clidiv.style.transition = 'all ' + transtime
         domdiv.style.transition = 'filter ' + transtime
         clidiv.style.height = clidiv.style.width = '100%'
