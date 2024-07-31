@@ -132,7 +132,7 @@ $.loop = () => {
   const ns = [], _g = g.g; for (const k in _g) {
     const n = _g[k]; if (!n.data) { n.data = {} } const d = n.data
     if (!d.pos) { newpos(n) } ns.push(n)
-  } if (!stop) { layout(ns); layouttime += time.realdelta } draw(ns)
+  } if (!stop) { for (let i = 0; i < 4; i++) { layout(ns) }; layouttime += time.realdelta } draw(ns)
   if (total_speed === 0) { if (!stop) { log('end in: ' + layouttime.toFixed(3) + 's') } stop = true }
 }
 $.camera = { x: 0, y: 0, s: 1 }

@@ -1,0 +1,1 @@
+{"id":"421d5cbbc85ff13ffbc610e80a6360368357aa5fa954bb91061e612bdb6a2df6","to":[],"value":"Object.assign($, await require('doceditor.js'))\r\ndoceditor('doc00.json')"}

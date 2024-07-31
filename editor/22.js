@@ -1657,6 +1657,7 @@
       const deconstructors = {
         AudioContext: v => v.close(),
         Worker: v => v.terminate(),
+        ResizeObserver: v => v.disconnect(),
       }, packedinstances = {}
       const pack_constructor = (o = {}) => {
         for (const k in deconstructors) {

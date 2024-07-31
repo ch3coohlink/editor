@@ -1,0 +1,1 @@
+{"id":"b4065c0a69c55d0112c56ce0a3412173b5e71cc8cd0ede4ddca1afa005bd5eaf","to":[],"value":"Object.assign($, await require('lib/loadworker.js'))\r\n\r\nloadworker('main.js')"}

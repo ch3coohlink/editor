@@ -1,0 +1,1 @@
+{"id":"251f5e7b1d32b98aa55bc888c5f7fd17fb8b28a90cbeb06a48ce86a4b9717342","to":[],"value":"Object.assign($, await require('component/index.js'))\r\n\r\nconsole.clear()\r\n"}
