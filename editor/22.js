@@ -713,6 +713,11 @@
           }
         } return { o, used }
       }; $.read = locatebypath
+      $.dir = (id, path) => {
+        const { o } = locatebypath(id, path)
+        if (o.type !== 'dir') { throw Error(`invalid directory: "${path}"`) }
+        return Object.keys(o.children)
+      }
       $.addhashobj = (h, t) => {
         const o = addnode(h); o.type = 'hashobj', o.value = t
       }
@@ -735,16 +740,16 @@
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
         if (!g[h]) { addhashobj(h, text) }
         addedge(b.id, h); b.type = 'file', b.value = h;
-        emit('file change', { o: b }); enddelay(); return b
+        emit('file change', { o: b, type: 'change' }); enddelay(); return b
       }
       $.writedir = (loc, name, force) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
-        b.type = 'dir'; emit('file change', { o: b }); enddelay(); return b
+        b.type = 'dir'; emit('file change', { o: b, type: 'change' }); enddelay(); return b
       }
       $.writelink = (loc, name, ref, force) => {
         checkname(name); setdelay(); const b = addtonode(loc, name, _, force)
         b.type = 'link', b.value = ref
-        emit('file change', { o: b }); enddelay(); return b
+        emit('file change', { o: b, type: 'change' }); enddelay(); return b
       }
       const copytree = (a, b) => {
         const c = g[a].children
@@ -1158,7 +1163,9 @@
       })
       on('delnode', ({ o }, vo = tovnode(o)) => {
         if (vo) { vg.delnode(vo.id); nodemap.del(o.id) }
-        if (o.type === 'file') { emit('file change', { o }) }
+        if (o.type === 'file' || o.type === 'link' || o.type === 'dir') {
+          emit('file change', { o, type: 'delete' })
+        }
       })
       on('addedge', ({ a, b, o }) => (a = tovnode(a), b = tovnode(b),
         a && b ? vg.addedge(a.id, b.id, o.name) : 0))
@@ -1213,7 +1220,7 @@
       $.savefile = (o, t, h = hexenc(sha256(t))) => {
         checkversion(o); setdelay(); deledge(o.id, o.value)
         if (!g[h]) { addhashobj(h, t) } addedge(o.id, h)
-        o.value = h; emit('file change', { o }); enddelay(); return o
+        o.value = h; emit('file change', { o, type: 'change' }); enddelay(); return o
       }
       $.execfile = o => emit('boot sandbox', { o })
       $.solveconflict = o => {
@@ -1240,17 +1247,17 @@
         const open = () => { if (!o.open) { toggle() } }
         const newfile = async () => {
           checkversion(o); writefile(o.id, await namingdialog(), '')
-          open(); emit('file change', { o })
+          open(); emit('file change', { o, type: 'new child' })
         }, newdir = async () => {
           checkversion(o); writedir(o.id, await namingdialog())
-          open(); emit('file change', { o })
+          open(); emit('file change', { o, type: 'new child' })
         }, newlink = async () => {
           checkversion(o); const n = await namingdialog(); checkname(n)
           const t = tornode(await pickonedialog()); checkisversion(t)
-          writelink(o.id, n, t.id); open(); emit('file change', { o })
+          writelink(o.id, n, t.id); open(); emit('file change', { o, type: 'new child' })
         }, relink = async () => {
           checkversion(o); const t = tornode(await pickonedialog()); checkisversion(t)
-          o.value = t.id; vo.customdraw(); emit('file change', { o })
+          o.value = t.id; vo.customdraw(); emit('file change', { o, type: 'change' })
         }, mergever = async () => {
           const t = tornode(await pickonedialog()); checkisversion(t)
           merge(o.id, t.id)
@@ -1258,14 +1265,16 @@
           checkversion(o); const on = getfrom(o).to[o.id].name
           const n = await namingdialog(on); checkname(n)
           renameedge(getfrom(o).id, o.id, n)
-          emit('file change', { o })
+          emit('file change', { o, type: 'rename' })
         }, deletever = async () => {
           checkversion(o); await deleteversiondialog()
           for (const k in o.from) {
             const p = o.from[k]; if (!leafversion(p)) { setlock(p, false) }
           } deltree(o.id)
         }, deletenode = async () => {
+          const p = o.from[Object.keys(o.from)[0]]
           if (o.type === 'dir') { deltree(o.id) } else { delnode(o.id) }
+          emit('file change', { o: p, type: 'del child' })
         }; switch (o.type) {
           case 'version': a = [
             ['📂 toggle', toggle], ['🗒️ new file', newfile], ['📁 new foler', newdir],
@@ -1626,7 +1635,10 @@
       } $.append(domdiv, clidiv)
 
       let filechange, _fchd; $.registerVCSevent = () =>
-        _fchd = vcs.on('file change', ({ o }) => filechange?.(o))
+        _fchd = vcs.on('file change', e => {
+          filechange?.(e)
+          if (env) { env.emit('file change', e) }
+        })
       const configdescription = {
         environment: { value: ['dom', 'worker'], des: { dom: '', worker: '' } },
         module: { value: ['nodejs', 'dynamic'], des: { nodejs: '', dynamic: '' } },
@@ -1688,7 +1700,7 @@
         }
       }
 
-      $.exec = async () => {
+      $.exec = async o => {
         // TODO: read a config file
 
         clear()
@@ -1700,6 +1712,7 @@
         domctn.style.height = root.style.height = '100%'
         root.style.overflow = 'auto'
         $.env = eventnode({ root, ...timeoutfunctions, ...constructorpacker })
+        if (o) { Object.assign(env, o) }
         env.$$ = window.$
 
         let logd, nolog = false, _error = (nodup, ...a) => (
@@ -1737,7 +1750,10 @@
 
         const watch = new Set()
         const reload = debounce(() => $.exec(), 0)
-        filechange = o => watch.has(o.id) ? reload() : 0
+        filechange = ({ o, type }) => {
+          if (!(type === 'change' || type === 'rename' || type === 'delete')) { return }
+          if (!watch.has(o.id)) { return } reload()
+        }
 
         const WRONGPATH = p => Error(`Invalid path: ${p}`)
         const virtuallink = (v, a, fst) => {
@@ -1750,9 +1766,9 @@
         const read = async (ver, p, fst, opt = {}, textonly = false) => {
           const a = p.split('/').filter(v => v), readver = virtuallink(ver, a, fst)
           let file; try { file = vcs.read(readver, a) } catch { throw WRONGPATH(p) }
-          const { o, used } = file, id = o.id
-          if (o.type !== 'file') { throw WRONGPATH(p) }
-          let text = vcs.g[o.value].value
+          const { o, used } = file, id = o.id; if (o.type !== 'file') {
+            if (opt.raw) { return o } else { throw WRONGPATH(p) }
+          } let text = vcs.g[o.value].value
           if (isv && replaces.has(id)) { text = replaces.get(id) }
           else if (opt.watch) { watch.add(id) }
           if (opt.watch) { [...used].forEach(v => watch.add(v.id)) }
@@ -1765,9 +1781,10 @@
           catch { throw WRONGPATH(p) }
         }
 
-        env.__require = (v, b, fst) => async (ph, p = solvepath(b, ph)) => {
-          const data = await read(v, p, fst, { watch: true }), file = data.id
-          if (loaded.has(file)) { return loaded.get(file) }
+        env.__require = (v, b, fst) => async (ph, opt = {}, p = solvepath(b, ph)) => {
+          opt.watch = opt.watch ?? true
+          const data = await read(v, p, fst, opt), file = data.id
+          if (loaded.has(file) && !opt.forceload) { return loaded.get(file) }
           const ex = await exec(...data); loaded.set(file, ex); return ex
         }
 
@@ -1797,6 +1814,7 @@
         env.__write__ = __write__
         env.read = __read__(rootver, __dirname, true)
         env.write = __write__(rootver, __dirname, true)
+        env.dir = p => vcs.dir(rootver, solvepath(__dirname, p), true)
 
         try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
