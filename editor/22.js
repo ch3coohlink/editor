@@ -713,6 +713,7 @@
           }
         } return { o, used }
       }; $.read = locatebypath
+      // TODO(BUG): dir can't show root directory because it's a ver rather than dir
       $.dir = (id, path) => {
         const { o } = locatebypath(id, path)
         if (o.type !== 'dir') { throw Error(`invalid directory: "${path}"`) }
@@ -1814,7 +1815,10 @@
         env.__write__ = __write__
         env.read = __read__(rootver, __dirname, true)
         env.write = __write__(rootver, __dirname, true)
-        env.dir = p => vcs.dir(rootver, solvepath(__dirname, p), true)
+        env.dir = p => {
+          const a = solvepath(__dirname, p).split('/').filter(v => v)
+          return vcs.dir(virtuallink(rootver, a, true), p)
+        }
 
         try { await exec(rootver, filepath, content, true) }
         catch (e) { _error(true, e); console.error(e) }
