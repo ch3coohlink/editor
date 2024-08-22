@@ -883,7 +883,7 @@
           if (e.target !== c || e.button !== 0) { return }
           if (insd) { return r(n) } closectxmenu()
           let sp = geteventlocation(e) // start position
-          let moveed = false; m = e => {
+          let moveed = false, m = e => {
             if (e.touches && e.touches.length > 1) { return } reset()
             const cp = geteventlocation(e)
             const { x, y } = screen2svgcoord()(...cp)
